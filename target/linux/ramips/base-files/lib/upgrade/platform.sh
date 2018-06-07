@@ -37,6 +37,7 @@ platform_check_image() {
 	d105|\
 	d240|\
 	dap-1350|\
+	dap-1520|\
 	db-wrt01|\
 	dcs-930|\
 	dcs-930l-b1|\

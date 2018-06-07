@@ -160,6 +160,14 @@ define Device/whr-1166d
 endef
 TARGET_DEVICES += whr-1166d
 
+define Device/dap-1520
+  DTS := DAP-1520
+  IMAGE_SIZE := $(ralink_default_fw_size_8M)
+  DEVICE_TITLE := D-Link DAP-1520
+  DEVICE_PACKAGES := kmod-ledtrig-netdev luci luci-proto-relay -kmod-mt76
+endef
+TARGET_DEVICES += dap-1520
+
 define Device/dir-810l
   DTS := DIR-810L
   IMAGE_SIZE := 6720k

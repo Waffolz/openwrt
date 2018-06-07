@@ -127,6 +127,9 @@ get_status_led() {
 	youku-yk1)
 		status_led="$board:blue:power"
 		;;
+	dap-1520)
+		status_led="$board:red:power"
+		;;
 	db-wrt01|\
 	esr-9753|\
 	pbr-d1)

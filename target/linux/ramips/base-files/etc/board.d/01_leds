@@ -112,6 +112,9 @@ d240)
 	set_wifi_led "$board:blue:wifi"
 	set_usb_led "$board:blue:usb"
 	;;
+dap-1520)
+	set_wifi_led "$board:green:wlan"
+	;;
 db-wrt01)
 	ucidef_set_led_default "power" "power" "$board:orange:power" "1"
 	;;
