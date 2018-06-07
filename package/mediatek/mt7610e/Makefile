@@ -17,6 +17,7 @@ PKG_SOURCE_VERSION:=$(PKG_REV)
 PKG_SOURCE_SUBDIR:=$(PKG_NAME)-$(PKG_VERSION)
 PKG_SOURCE_URL:=https://github.com/presisco/mt7610e-p4rev-118062/releases/download/1.0
 PKG_SOURCE:=$(PKG_NAME)-$(PKG_VERSION).tar.bz2
+PKG_MD5SUM:=92af2f814ceabfe9aea9a28ef0c8499a6cad109562299692735ed4b296c85164
 
 PKG_BUILD_DIR:=$(KERNEL_BUILD_DIR)/$(PKG_NAME)-$(PKG_VERSION)
 
@@ -32,30 +33,17 @@ PKG_CONFIG_DEPENDS:=$(foreach c, $(PKG_KCONFIG),$(if $(CONFIG_$c),CONFIG_$(c)))
 include $(INCLUDE_DIR)/package.mk
 
 define KernelPackage/mt7610e
-  CATEGORY:=Ralink Properties
-  TITLE:=Ralink mt7610e wifi AP driver
+  CATEGORY:=MTK Properties
+  TITLE:=MTK MT7610e wifi AP driver
   FILES:=$(PKG_BUILD_DIR)/build/mt7610e.ko
   AUTOLOAD:=$(call AutoLoad,91,mt7610e)
   SUBMENU:=Drivers
-  DEPENDS:=+uci2dat +8021xd
+  DEPENDS:=+uci2dat +wireless-tools
   MENU:=1
 endef
 
 define KernelPackage/mt7610e/config
 	source "$(SOURCE)/config.in"
-endef
-
-define P4/Info
-  P4URL:=//Embedded_WIFI/MP/MT7610/rlt_wifi/
-endef
-
-define P4/Release
-  make release
-  mkdir -p build
-  cp Makefile.ap.soc.dpa build/Makefile
-  cp Kconfig.ap.soc build/Kconfig
-  mv DPA src
-  tar cjf mt7610e.tar.bz2 build src
 endef
 
 define Build/Prepare
@@ -81,7 +69,7 @@ define KernelPackage/mt7610e/install
 	$(INSTALL_DIR) $(1)/etc/wireless/mt7610e/
 	$(INSTALL_BIN) ./files/mt7610e.dat $(1)/etc/wireless/mt7610e/
 	-$(INSTALL_BIN) ./files/mt7610e.eeprom.bin $(1)/etc/wireless/mt7610e/
-	echo p$(P4REV) > $(1)/etc/wireless/mt7610e/version
+	echo p$(PKG_FIX) > $(1)/etc/wireless/mt7610e/version
 endef
 
 $(eval $(call KernelPackage,mt7610e))

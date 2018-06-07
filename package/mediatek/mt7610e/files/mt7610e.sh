@@ -25,7 +25,7 @@ detect_mt7610e() {
 	[ -d $module ] || return
 	uci get wireless.mt7610e >/dev/null 2>&1 && return
 	ifconfig rai0 >/dev/null 2>&1 || return
-	cat <<EOF
+	cat <<EOF >> /etc/config/wireless
 config wifi-device mt7610e
 	option type mt7610e
 	option vendor ralink
@@ -38,7 +38,7 @@ config wifi-iface
 	option ifname rai0
 	option network lan
 	option mode ap
-	option ssid OpenWrt-5G
+	option ssid LEDE-5G
 	option encryption none
 
 EOF

@@ -63,67 +63,6 @@ sync_uci_with_dat() {
 }
 
 
-
-chk8021x() {
-        local x8021x="0" encryption device="$1" prefix
-        #vifs=`uci show wireless | grep "=wifi-iface" | sed -n "s/=wifi-iface//gp"`
-        echo "u8021x dev $device" > /tmp/802.$device.log
-        config_get vifs "$device" vifs
-        for vif in $vifs; do
-                config_get ifname $vif ifname
-                echo "ifname = $ifname" >> /tmp/802.$device.log
-                config_get encryption $vif encryption
-                echo "enc = $encryption" >> /tmp/802.$device.log
-                case "$encryption" in
-                        wpa+*)
-                                [ "$x8021x" == "0" ] && x8021x=1
-                                echo 111 >> /tmp/802.$device.log
-                                ;;
-                        wpa2+*)
-                                [ "$x8021x" == "0" ] && x8021x=1
-                                echo 1l2 >> /tmp/802.$device.log
-                                ;;
-                        wpa-mixed*)
-                                [ "$x8021x" == "0" ] && x8021x=1
-                                echo 1l3 >> /tmp/802.$device.log
-                                ;;
-                esac
-                ifpre=$(echo $ifname | cut -c1-3)
-                echo "prefix = $ifpre" >> /tmp/802.$device.log
-                if [ "$ifpre" == "rai" ]; then
-                    prefix="rai"
-                else
-                    prefix="ra"
-                fi
-                if [ "1" == "$x8021x" ]; then
-                    break
-                fi
-        done
-        echo "x8021x $x8021x, pre $prefix" >>/tmp/802.$device.log
-        if [ "1" == $x8021x ]; then
-            if [ "$prefix" == "ra" ]; then
-                echo "killall 8021xd" >>/tmp/802.$device.log
-                killall 8021xd
-                echo "/bin/8021xd -d 9" >>/tmp/802.$device.log
-                /bin/8021xd -d 9 >> /tmp/802.$device.log 2>&1
-            else # $prefixa == rai
-                echo "killall 8021xdi" >>/tmp/802.$device.log
-                killall 8021xdi
-                echo "/bin/8021xdi -d 9" >>/tmp/802.$device.log
-                /bin/8021xdi -d 9 >> /tmp/802.$device.log 2>&1
-            fi
-        else
-            if [ "$prefix" == "ra" ]; then
-                echo "killall 8021xd" >>/tmp/802.$device.log
-                killall 8021xd
-            else # $prefixa == rai
-                echo "killall 8021xdi" >>/tmp/802.$device.log
-                killall 8021xdi
-            fi
-        fi
-}
-
-
 # $1=device, $2=module
 reinit_wifi() {
     echo "reinit_wifi($1,$2,$3,$4)" >>/tmp/wifi.log
@@ -163,7 +102,6 @@ reinit_wifi() {
         fi
     done
 
-    chk8021x $device
 }
 
 prepare_ralink_wifi() {
@@ -239,7 +177,6 @@ enable_ralink_wifi() {
             config_set "$vif" bridge "$bridge"
             start_net "$ifname" "$net_cfg"
         }
-	chk8021x $device
         set_wifi_up "$vif" "$ifname"
     done
 }
@@ -268,7 +205,7 @@ detect_ralink_wifi() {
             echo "device $device not recognized!! " >>/tmp/wifi.log
             ;;
     esac                    
-    cat <<EOF
+    cat <<EOF >> /etc/config/wireless
 config wifi-device    $device
     option type     $device
     option vendor   ralink
@@ -281,7 +218,7 @@ config wifi-iface
     option ifname    $ifname
     option network  lan
     option mode     ap
-    option ssid OpenWrt-$device
+    option ssid LEDE-$device
     option encryption psk2
     option key      12345678
 
