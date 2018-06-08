@@ -31,6 +31,10 @@ repair_wireless_uci() {
                 netif_new="rai"${ifn5g}
                 ifn5g=$(( $ifn5g + 1 ))
                 ;;
+            radio0 )
+                netif_new="wlan"${ifn2g}
+                ifn2g=$(( $ifn2g + 1 ))
+                ;;
             * )
                 echo "device $device not recognized!! " >>/tmp/wifi.log
                 ;;
@@ -91,9 +95,9 @@ reinit_wifi() {
     # bring up vifs
     for vif in $vifs; do
         config_get ifname $vif ifname
-        config_get disabled $vif disabled
+        config_get_bool disabled $vif disabled 0
         echo "ifconfig $ifname down" >>/tmp/wifi.log
-        if [ "$disabled" == "1" ]; then
+        if [ "$disabled" -eq 1 ]; then
             echo "$ifname marked disabled, skip" >>/tmp/wifi.log
             continue
         else
@@ -157,11 +161,11 @@ enable_ralink_wifi() {
     # bring up vifs
     for vif in $vifs; do
         config_get ifname $vif ifname
-        config_get disabled $vif disabled
+        config_get_bool disabled $vif disabled 0
 	config_get radio $device radio
         ifconfig $ifname down
         echo "ifconfig $ifname down" >>/dev/null
-        if [ "$disabled" == "1" ]; then
+        if [ "$disabled" -eq 1 ]; then
             echo "$ifname marked disabled, skip" >>/dev/null
             continue
         else
@@ -200,6 +204,10 @@ detect_ralink_wifi() {
         mt7610e | mt7612e )
             ifname="rai0"
             band="5G"
+            ;;
+        radio0 )
+            ifname="wlan0"
+            band="2.4G"
             ;;
         * )
             echo "device $device not recognized!! " >>/tmp/wifi.log

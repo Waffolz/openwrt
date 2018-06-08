@@ -41,6 +41,7 @@ then
 	logger "Wireless configuration reset"
 	wifi down
 	rm /etc/config/wireless
+	cp -f /rom/etc/wireless/mt7610e/mt7610e.dat /etc/wireless/mt7610e/mt7610e.dat
 	wifi config
 	wifi
 fi
