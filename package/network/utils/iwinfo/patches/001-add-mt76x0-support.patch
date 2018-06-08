@@ -1,0 +1,2310 @@
+diff --git a/Makefile b/Makefile
+index 4a62205..a64833c 100644
+--- a/Makefile
++++ b/Makefile
+@@ -32,6 +32,11 @@ ifneq ($(filter nl80211,$(IWINFO_BACKENDS)),)
+ 	IWINFO_LIB_OBJ     += iwinfo_nl80211.o
+ endif
+ 
++ifneq ($(filter mt76x0,$(IWINFO_BACKENDS)),)
++	IWINFO_CFLAGS      += -DUSE_MT76X0
++	IWINFO_LIB_OBJ     += iwinfo_mt76x0_scan.o iwinfo_mt76x0.o
++endif
++
+ 
+ %.o: %.c
+ 	$(CC) $(IWINFO_CFLAGS) $(FPIC) -c -o $@ $<
+diff --git a/api/mtk.h b/api/mtk.h
+new file mode 100644
+index 0000000..321454d
+--- /dev/null
++++ b/api/mtk.h
+@@ -0,0 +1,183 @@
++#ifndef __MTK_H__
++#define __MTK_H__
++
++#define MAC_ADDR_LENGTH		6
++#define MAX_NUMBER_OF_MAC	32
++
++#ifndef ETHER_ADDR_LEN
++#define ETHER_ADDR_LEN		6
++#endif
++
++typedef unsigned char 	UCHAR;
++typedef char		CHAR;
++typedef unsigned int	UINT32;
++typedef unsigned short	USHORT;
++typedef short		SHORT;
++typedef unsigned long	ULONG;
++
++#if WIRELESS_EXT <= 11
++#ifndef SIOCDEVPRIVATE
++#define SIOCDEVPRIVATE                             	 0x8BE0
++#endif
++#define SIOCIWFIRSTPRIV                                  SIOCDEVPRIVATE
++#endif
++
++#define FIXED_TXMODE_HT		0
++#define FIXED_TXMODE_CCK	1
++#define FIXED_TXMODE_OFDM 	2
++#define FIXED_TXMODE_VHT	3
++#define MODE_CCK		0
++#define MODE_OFDM		1
++#define MODE_HTMIX		2
++#define MODE_HTGREENFIELD	3
++#define MODE_VHT		4
++
++#define BW_20			0
++#define BW_40			1
++#define BW_80			2
++#define BW_BOTH			3
++#define BW_10			4 // not used
++
++#define WDS_DISABLE_MODE	0
++#define WDS_RESTRICT_MODE	1
++#define WDS_BRIDGE_MODE		2
++#define WDS_REPEATER_MODE	3
++#define WDS_LAZY_MODE		4
++
++typedef enum _RT_802_11_PHY_MODE {
++	PHY_11BG_MIXED = 0,
++	PHY_11B,
++	PHY_11A,
++	PHY_11ABG_MIXED,
++	PHY_11G,
++	PHY_11ABGN_MIXED,   // both band   5
++	PHY_11N,            //    6
++	PHY_11GN_MIXED,     // 2.4G band      7
++	PHY_11AN_MIXED,     // 5G  band       8
++	PHY_11BGN_MIXED,    // if check 802.11b.      9
++	PHY_11AGN_MIXED,    // if check 802.11b.      10
++	PHY_11N_5G,         // 11n-only with 5G band  11
++	PHY_11VHT_N_ABG_MIXED = 12, /* 12 -> AC/A/AN/B/G/GN mixed */
++	PHY_11VHT_N_AG_MIXED = 13, /* 13 -> AC/A/AN/G/GN mixed  */
++	PHY_11VHT_N_A_MIXED = 14, /* 14 -> AC/AN/A mixed in 5G band */
++	PHY_11VHT_N_MIXED = 15, /* 15 -> AC/AN mixed in 5G band */
++} RT_802_11_PHY_MODE;
++
++enum WIFI_MODE {
++	WMODE_INVALID = 0,
++	WMODE_A = 1 << 0,
++	WMODE_B = 1 << 1,
++	WMODE_G = 1 << 2,
++	WMODE_GN = 1 << 3,
++	WMODE_AN = 1 << 4,
++	WMODE_AC = 1 << 5,
++	WMODE_COMP = 6,	/* total types of supported wireless mode, add this value once yow add new type */
++};
++
++/* MIMO Tx parameter, ShortGI, MCS, STBC, etc.  these are fields in TXWI. Don't change this definition!!! */
++typedef union _MACHTTRANSMIT_SETTING {
++        struct {
++		unsigned short MCS:6;
++		unsigned short ldpc:1;
++		unsigned short BW:2;
++		unsigned short ShortGI:1;
++		unsigned short STBC:1;
++		unsigned short eTxBF:1;
++		unsigned short iTxBF:1;
++		unsigned short MODE:3;
++        } field;
++	unsigned short word;
++} MACHTTRANSMIT_SETTING, *PMACHTTRANSMIT_SETTING;
++
++typedef struct _RT_802_11_MAC_ENTRY {
++	unsigned char	ApIdx;
++	unsigned char	Addr[ETHER_ADDR_LEN];
++	unsigned char	Aid;
++	unsigned char	Psm;     // 0:PWR_ACTIVE, 1:PWR_SAVE
++	unsigned char	MimoPs;  // 0:MMPS_STATIC, 1:MMPS_DYNAMIC, 3:MMPS_Enabled
++	char		AvgRssi0;
++	char		AvgRssi1;
++	char		AvgRssi2;
++	unsigned int	ConnectedTime;
++        MACHTTRANSMIT_SETTING TxRate;
++	unsigned int	LastRxRate;
++} RT_802_11_MAC_ENTRY, *PRT_802_11_MAC_ENTRY;
++
++typedef struct _RT_802_11_MAC_TABLE {
++	unsigned long Num;
++        RT_802_11_MAC_ENTRY Entry[MAX_NUMBER_OF_MAC];
++} RT_802_11_MAC_TABLE, *PRT_802_11_MAC_TABLE;
++
++typedef struct _SITE_SURVEY 
++{ 
++	char channel[4];
++	unsigned char ssid[33]; 
++	char bssid[20];
++	char encryption[23];
++	char signal[9];
++	char wmode[8];
++	char extch[7];
++	char nt[3];
++//	char wps[4];
++//	char dpid[5];
++} SITE_SURVEY;
++
++typedef struct _SITE_SURVEY_ARRAY
++{ 
++	SITE_SURVEY SiteSurvey[64];
++} SSA;
++
++#define SITE_SURVEY_APS_MAX	(16*1024)
++
++typedef struct _PAIR_CHANNEL_FREQ_ENTRY
++{
++	unsigned long   lChannel;
++	unsigned long   lFreq;
++} PAIR_CHANNEL_FREQ_ENTRY, *PPAIR_CHANNEL_FREQ_ENTRY;
++
++#define RT_PRIV_IOCTL			(SIOCIWFIRSTPRIV + 0x01)
++#define RTPRIV_IOCTL_SET		(SIOCIWFIRSTPRIV + 0x02)
++#define RTPRIV_IOCTL_GSITESURVEY	(SIOCIWFIRSTPRIV + 0x0D)
++#define RTPRIV_IOCTL_WSC_PROFILE	(SIOCIWFIRSTPRIV + 0x12)
++#define	RTPRIV_IOCTL_GSTAINFO		(SIOCIWFIRSTPRIV + 0x1A)
++#define	RTPRIV_IOCTL_GSTAT		(SIOCIWFIRSTPRIV + 0x1B)
++#define RTPRIV_IOCTL_GRSSI		(SIOCIWFIRSTPRIV + 0x1C)
++#define RTPRIV_IOCTL_GTXBFCALP		(SIOCIWFIRSTPRIV + 0x1D)
++#define OID_802_11_DISASSOCIATE		0x0114
++#define OID_802_11_BSSID_LIST_SCAN	0x0508
++#define OID_802_11_SSID			0x0509
++#define OID_802_11_BSSID		0x050A
++#define RT_OID_802_11_RADIO		0x050B
++#define RT_OID_802_11_PHY_MODE		0x050C
++#define OID_802_11_BSSID_LIST		0x0609
++#define OID_802_3_CURRENT_ADDRESS	0x060A
++#define OID_GEN_MEDIA_CONNECT_STATUS	0x060B
++#define RT_OID_GET_PHY_MODE		0x0761
++#define OID_GET_SET_TOGGLE		0x8000
++#define RT_OID_SYNC_RT61		0x0D010750
++#define RT_OID_WSC_QUERY_STATUS		((RT_OID_SYNC_RT61 + 0x01) & 0xffff)
++#define RT_OID_WSC_PIN_CODE		((RT_OID_SYNC_RT61 + 0x02) & 0xffff)
++
++#define MTD_PART_NAME_FACTORY	"Factory"
++#define MTD_PART_NAME_KERNEL	"Kernel"
++#define MTD_PART_NAME_RWFS	"RWFS"
++
++#if defined (CONFIG_RALINK_MT7621)
++#define OFFSET_MAC_GMAC0	0xE000
++#define OFFSET_MAC_GMAC2	0xE006
++#else
++#define OFFSET_MAC_GMAC0	0x0028
++#define OFFSET_MAC_GMAC2	0x0022
++#endif
++#define OFFSET_MAC_ADDR_WSOC	0x0004
++#define OFFSET_MAC_ADDR_INIC	0x8004
++#define OFFSET_PIN_CODE		0x0180
++#define OFFSET_TXBF_PARA	0x01A0
++#define OFFSET_BOOT_VER		0x018A
++#define OFFSET_COUNTRY_CODE	0x0188
++#define OFFSET_REGSPEC_CODE	0x0248
++
++
++
++#endif // __MTK_H__
++
+diff --git a/hardware.txt b/hardware.txt
+index 4cac0a1..62aa0d8 100644
+--- a/hardware.txt
++++ b/hardware.txt
+@@ -58,3 +58,12 @@
+ 0x1814 0x3052 0x1814 0x0008    0      0  "RaLink"   "Rt3052"
+ 0x1814 0x3352 0x1814 0x000c    0      0  "RaLink"   "Rt3352"
+ 0x11ab 0x2a55 0x11ab 0x0000    0      0  "Marvell"  "88W8864"
++0x1814 0x7620 0x1814 0x000c    0      0  "Mediatek" "MT7620"
++0x1814 0x7610 0x1814 0x0001    0      0  "Mediatek" "MT7610"
++0x1814 0x7662 0x1814 0x000e    0      0  "Mediatek" "MT7602"
++0x1814 0x7662 0x1814 0x000c    0      0  "Mediatek" "MT7612"
++0x1814 0x7662 0x1814 0x000f    0      0  "Mediatek" "MT7612"
++0x1814 0x7603 0x1814 0x0006    0      0  "Mediatek" "MT7603"
++0x1814 0x7603 0x1814 0x0004    0      0  "Mediatek" "MT7603"
++0x1814 0x7603 0x1814 0x0007    0      0  "Mediatek" "MT7603"
++0x1814 0x7628 0x1814 0x0004    0      0  "Mediatek" "MT7628"
+diff --git a/include/iwinfo.h b/include/iwinfo.h
+index bb2b20a..b966a7f 100644
+--- a/include/iwinfo.h
++++ b/include/iwinfo.h
+@@ -224,6 +224,7 @@ extern const struct iwinfo_ops wext_ops;
+ extern const struct iwinfo_ops madwifi_ops;
+ extern const struct iwinfo_ops nl80211_ops;
+ extern const struct iwinfo_ops wl_ops;
++extern const struct iwinfo_ops mt76x0_ops;
+ 
+ #include "iwinfo/utils.h"
+ 
+diff --git a/include/iwinfo/lua.h b/include/iwinfo/lua.h
+index 8b76b25..11be92d 100644
+--- a/include/iwinfo/lua.h
++++ b/include/iwinfo/lua.h
+@@ -41,6 +41,10 @@
+ #define IWINFO_NL80211_META	"iwinfo.nl80211"
+ #endif
+ 
++#ifdef USE_MT76X0
++#define IWINFO_MT76X0_META	"iwinfo.mt76x0"
++#endif
++
+ 
+ #define LUA_REG(type,op) \
+ 	{ #op, iwinfo_L_##type##_##op }
+diff --git a/iwinfo_cli.c b/iwinfo_cli.c
+index aab6ae6..13472a0 100644
+--- a/iwinfo_cli.c
++++ b/iwinfo_cli.c
+@@ -673,7 +673,7 @@ static void print_assoclist(const struct iwinfo_ops *iw, const char *ifname)
+ 	char buf[IWINFO_BUFSIZE];
+ 	struct iwinfo_assoclist_entry *e;
+ 
+-	if (iw->assoclist(ifname, buf, &len))
++	if (iw->assoclist(ifname, buf, &len) < 0)
+ 	{
+ 		printf("No information available\n");
+ 		return;
+diff --git a/iwinfo_lib.c b/iwinfo_lib.c
+index fa9bb9f..a7207e8 100644
+--- a/iwinfo_lib.c
++++ b/iwinfo_lib.c
+@@ -332,6 +332,9 @@ static const struct iwinfo_ops *backends[] = {
+ #endif
+ #ifdef USE_WL
+ 	&wl_ops,
++#endif
++#ifdef USE_MT76X0
++	&mt76x0_ops,
+ #endif
+ 	&wext_ops,
+ };
+diff --git a/iwinfo_lua.c b/iwinfo_lua.c
+index 1421111..1c52897 100644
+--- a/iwinfo_lua.c
++++ b/iwinfo_lua.c
+@@ -298,7 +298,7 @@ static int iwinfo_L_assoclist(lua_State *L, int (*func)(const char *, char *, in
+ 	lua_newtable(L);
+ 	memset(rv, 0, sizeof(rv));
+ 
+-	if (!(*func)(ifname, rv, &len))
++	if ((*func)(ifname, rv, &len) >= 0)
+ 	{
+ 		for (i = 0; i < len; i += sizeof(struct iwinfo_assoclist_entry))
+ 		{
+@@ -736,6 +736,36 @@ LUA_WRAP_STRUCT_OP(nl80211,mbssid_support)
+ LUA_WRAP_STRUCT_OP(nl80211,hardware_id)
+ #endif
+ 
++#ifdef USE_MT76X0
++/* Mediatek MT76X0 */
++LUA_WRAP_INT_OP(mt76x0,channel)
++LUA_WRAP_INT_OP(mt76x0,frequency)
++LUA_WRAP_INT_OP(mt76x0,frequency_offset)
++LUA_WRAP_INT_OP(mt76x0,txpower)
++LUA_WRAP_INT_OP(mt76x0,txpower_offset)
++LUA_WRAP_INT_OP(mt76x0,bitrate)
++LUA_WRAP_INT_OP(mt76x0,signal)
++LUA_WRAP_INT_OP(mt76x0,noise)
++LUA_WRAP_INT_OP(mt76x0,quality)
++LUA_WRAP_INT_OP(mt76x0,quality_max)
++LUA_WRAP_STRING_OP(mt76x0,ssid)
++LUA_WRAP_STRING_OP(mt76x0,bssid)
++LUA_WRAP_STRING_OP(mt76x0,country)
++LUA_WRAP_STRING_OP(mt76x0,hardware_name)
++LUA_WRAP_STRING_OP(mt76x0,phyname)
++LUA_WRAP_STRUCT_OP(mt76x0,mode)
++LUA_WRAP_STRUCT_OP(mt76x0,assoclist)
++LUA_WRAP_STRUCT_OP(mt76x0,txpwrlist)
++LUA_WRAP_STRUCT_OP(mt76x0,scanlist)
++LUA_WRAP_STRUCT_OP(mt76x0,freqlist)
++LUA_WRAP_STRUCT_OP(mt76x0,countrylist)
++LUA_WRAP_STRUCT_OP(mt76x0,hwmodelist)
++LUA_WRAP_STRUCT_OP(mt76x0,htmodelist)
++LUA_WRAP_STRUCT_OP(mt76x0,encryption)
++LUA_WRAP_STRUCT_OP(mt76x0,mbssid_support)
++LUA_WRAP_STRUCT_OP(mt76x0,hardware_id)
++#endif
++
+ /* Wext */
+ LUA_WRAP_INT_OP(wext,channel)
+ LUA_WRAP_INT_OP(wext,frequency)
+@@ -863,6 +893,39 @@ static const luaL_reg R_nl80211[] = {
+ };
+ #endif
+ 
++#ifdef USE_MT76X0
++/* mt76x0 table */
++static const luaL_reg R_mt76x0[] = {
++	LUA_REG(mt76x0,channel),
++	LUA_REG(mt76x0,frequency),
++	LUA_REG(mt76x0,frequency_offset),
++	LUA_REG(mt76x0,txpower),
++	LUA_REG(mt76x0,txpower_offset),
++	LUA_REG(mt76x0,bitrate),
++	LUA_REG(mt76x0,signal),
++	LUA_REG(mt76x0,noise),
++	LUA_REG(mt76x0,quality),
++	LUA_REG(mt76x0,quality_max),
++	LUA_REG(mt76x0,mode),
++	LUA_REG(mt76x0,ssid),
++	LUA_REG(mt76x0,bssid),
++	LUA_REG(mt76x0,country),
++	LUA_REG(mt76x0,assoclist),
++	LUA_REG(mt76x0,txpwrlist),
++	LUA_REG(mt76x0,scanlist),
++	LUA_REG(mt76x0,freqlist),
++	LUA_REG(mt76x0,countrylist),
++	LUA_REG(mt76x0,hwmodelist),
++	LUA_REG(mt76x0,htmodelist),
++	LUA_REG(mt76x0,encryption),
++	LUA_REG(mt76x0,mbssid_support),
++	LUA_REG(mt76x0,hardware_id),
++	LUA_REG(mt76x0,hardware_name),
++	LUA_REG(mt76x0,phyname),
++	{ NULL, NULL }
++};
++#endif
++
+ /* Wext table */
+ static const luaL_reg R_wext[] = {
+ 	LUA_REG(wext,channel),
+@@ -932,6 +995,15 @@ LUALIB_API int luaopen_iwinfo(lua_State *L) {
+ 	lua_setfield(L, -2, "nl80211");
+ #endif
+ 
++#ifdef USE_MT76X0
++	luaL_newmetatable(L, IWINFO_MT76X0_META);
++	luaL_register(L, NULL, R_common);
++	luaL_register(L, NULL, R_mt76x0);
++	lua_pushvalue(L, -1);
++	lua_setfield(L, -2, "__index");
++	lua_setfield(L, -2, "mt76x0");
++#endif
++
+ 	luaL_newmetatable(L, IWINFO_WEXT_META);
+ 	luaL_register(L, NULL, R_common);
+ 	luaL_register(L, NULL, R_wext);
+diff --git a/iwinfo_mt76x0.c b/iwinfo_mt76x0.c
+new file mode 100644
+index 0000000..0487b41
+--- /dev/null
++++ b/iwinfo_mt76x0.c
+@@ -0,0 +1,941 @@
++/*
++ * iwinfo - Wireless Information Library - MT76X0 Backend
++ *
++ *   Copyright (C) 2009 Jo-Philipp Wich <xm@subsignal.org>
++ *
++ * The iwinfo library is free software: you can redistribute it and/or
++ * modify it under the terms of the GNU General Public License version 2
++ * as published by the Free Software Foundation.
++ *
++ * The iwinfo library is distributed in the hope that it will be useful,
++ * but WITHOUT ANY WARRANTY; without even the implied warranty of
++ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
++ * See the GNU General Public License for more details.
++ *
++ * You should have received a copy of the GNU General Public License along
++ * with the iwinfo library. If not, see http://www.gnu.org/licenses/.
++ *
++ * Parts of this code are derived from the Linux wireless tools, iwlib.c,
++ * iwlist.c and iwconfig.c in particular.
++ */
++
++#include "iwinfo.h"
++#include "iwinfo_mt76x0.h"
++
++/* Some usefull constants */
++#define KILO	1e3
++#define MEGA	1e6
++#define GIGA	1e9
++
++char data[4096];
++int iw_ignore_version_sp = 0;
++
++typedef struct _CH_FREQ_MAP_ {
++    unsigned short channel;
++    unsigned short freqKHz;
++} CH_FREQ_MAP;
++
++#define FREQ_REF 40
++#define FREQ_REF_CYCLES 89
++#define DOUBLER 1
++CH_FREQ_MAP CH_HZ_ID_MAP[]=
++{
++    {1, 2412},
++    {2, 2417},
++    {3, 2422},
++    {4, 2427},
++    {5, 2432},
++    {6, 2437},
++    {7, 2442},
++    {8, 2447},
++    {9, 2452},
++    {10, 2457},
++    {11, 2462},
++    {12, 2467},
++    {13, 2472},
++    {14, 2484},
++
++    /*  UNII */
++    {36, 5180},
++    {40, 5200},
++    {44, 5220},
++    {48, 5240},
++    {52, 5260},
++    {56, 5280},
++    {60, 5300},
++    {64, 5320},
++    {149, 5745},
++    {153, 5765},
++    {157, 5785},
++    {161, 5805},
++    {165, 5825},
++    {167, 5835},
++    {169, 5845},
++    {171, 5855},
++    {173, 5865},
++
++    /* HiperLAN2 */
++    {100, 5500},
++    {104, 5520},
++    {108, 5540},
++    {112, 5560},
++    {116, 5580},
++    {120, 5600},
++    {124, 5620},
++    {128, 5640},
++    {132, 5660},
++    {136, 5680},
++    {140, 5700},
++
++    /* Japan MMAC */
++    {34, 5170},
++    {38, 5190},
++    {42, 5210},
++    {46, 5230},
++
++    /*  Japan */
++    {183, 4915},
++    {184, 4920},
++    {185, 4925},
++    {187, 4935},
++    {188, 4940},
++    {189, 4945},
++    {192, 4960},
++    {196, 4980},
++    {200, 5000},
++    {204, 5020},
++    {208, 5040},	/* Japan, means J08 */
++    {212, 5060},	/* Japan, means J12 */
++    {216, 5080},	/* Japan, means J16 */
++};
++
++#define MYLOG(mes) \
++	{   char buf[256];  \
++	sprintf(buf, "logger -t iwinfo %s:%d: %s", __FUNCTION__, __LINE__, mes);	 \
++	system(buf);	\
++}
++
++
++
++/*------------------------------------------------------------------*/
++/*
++ * Get the range information out of the driver
++ */
++int
++ralink_get_range_info(iwrange *	range, char* buffer, int length)
++{
++    union iw_range_raw *	range_raw;
++
++    /* Point to the buffer */
++    range_raw = (union iw_range_raw *) buffer;
++
++    /* For new versions, we can check the version directly, for old versions
++     * we use magic. 300 bytes is a also magic number, don't touch... */
++    if (length < 300)
++    {
++        /* That's v10 or earlier. Ouch ! Let's make a guess...*/
++        range_raw->range.we_version_compiled = 9;
++    }
++
++//  fprintf(stderr, "Version: %d", range_raw->range.we_version_compiled);
++
++    /* Check how it needs to be processed */
++    if (range_raw->range.we_version_compiled > 15)
++    {
++        /* This is our native format, that's easy... */
++        /* Copy stuff at the right place, ignore extra */
++        memcpy((char *) range, buffer, sizeof(iwrange));
++    }
++    else
++    {
++        /* Zero unknown fields */
++        bzero((char *) range, sizeof(struct iw_range));
++
++        /* Initial part unmoved */
++        memcpy((char *) range,
++               buffer,
++               iwr15_off(num_channels));
++        /* Frequencies pushed futher down towards the end */
++        memcpy((char *) range + iwr_off(num_channels),
++               buffer + iwr15_off(num_channels),
++               iwr15_off(sensitivity) - iwr15_off(num_channels));
++        /* This one moved up */
++        memcpy((char *) range + iwr_off(sensitivity),
++               buffer + iwr15_off(sensitivity),
++               iwr15_off(num_bitrates) - iwr15_off(sensitivity));
++        /* This one goes after avg_qual */
++        memcpy((char *) range + iwr_off(num_bitrates),
++               buffer + iwr15_off(num_bitrates),
++               iwr15_off(min_rts) - iwr15_off(num_bitrates));
++        /* Number of bitrates has changed, put it after */
++        memcpy((char *) range + iwr_off(min_rts),
++               buffer + iwr15_off(min_rts),
++               iwr15_off(txpower_capa) - iwr15_off(min_rts));
++        /* Added encoding_login_index, put it after */
++        memcpy((char *) range + iwr_off(txpower_capa),
++               buffer + iwr15_off(txpower_capa),
++               iwr15_off(txpower) - iwr15_off(txpower_capa));
++        /* Hum... That's an unexpected glitch. Bummer. */
++        memcpy((char *) range + iwr_off(txpower),
++               buffer + iwr15_off(txpower),
++               iwr15_off(avg_qual) - iwr15_off(txpower));
++        /* Avg qual moved up next to max_qual */
++        memcpy((char *) range + iwr_off(avg_qual),
++               buffer + iwr15_off(avg_qual),
++               sizeof(struct iw_quality));
++    }
++
++    /* We are now checking much less than we used to do, because we can
++     * accomodate more WE version. But, there are still cases where things
++     * will break... */
++    if (!iw_ignore_version_sp)
++    {
++        /* We don't like very old version (unfortunately kernel 2.2.X) */
++        if (range->we_version_compiled <= 10)
++        {
++            fprintf(stderr, "Warning: Driver for device %s has been compiled with an ancient version\n", "raxx");
++            fprintf(stderr, "of Wireless Extension, while this program support version 11 and later.\n");
++            fprintf(stderr, "Some things may be broken...\n\n");
++        }
++
++        /* We don't like future versions of WE, because we can't cope with
++         * the unknown */
++        if (range->we_version_compiled > 22)
++        {
++            fprintf(stderr, "Warning: Driver for device %s has been compiled with version %d\n", "raxx", range->we_version_compiled);
++            fprintf(stderr, "of Wireless Extension, while this program supports up to version %d.\n", 22);
++            fprintf(stderr, "Some things may be broken...\n\n");
++        }
++
++        /* Driver version verification */
++        if ((range->we_version_compiled > 10) &&
++                (range->we_version_compiled < range->we_version_source))
++        {
++            fprintf(stderr, "Warning: Driver for device %s recommend version %d of Wireless Extension,\n", "raxx", range->we_version_source);
++            fprintf(stderr, "but has been compiled with version %d, therefore some driver features\n", range->we_version_compiled);
++            fprintf(stderr, "may not be available...\n\n");
++        }
++        /* Note : we are only trying to catch compile difference, not source.
++         * If the driver source has not been updated to the latest, it doesn't
++         * matter because the new fields are set to zero */
++    }
++
++    /* Don't complain twice.
++     * In theory, the test apply to each individual driver, but usually
++     * all drivers are compiled from the same kernel. */
++    iw_ignore_version_sp = 1;
++
++    return (0);
++}
++
++int GetBW(int BW)
++{
++    switch(BW)
++    {
++    case BW_10:
++        return 1;
++    case BW_20:
++        return 2;
++    case BW_40:
++        return 4;
++    case BW_80:
++        return 8;
++    default:
++        return 0;
++    }
++}
++
++char* GetPhyMode(int Mode)
++{
++    switch(Mode)
++    {
++    case MODE_CCK:
++        return "CCK";
++    case MODE_OFDM:
++        return "OFDM";
++    case MODE_HTMIX:
++        return "HTMIX";
++    case MODE_HTGREENFIELD:
++        return "HT_GF";
++    case MODE_VHT:
++        return "VHT";
++    default:
++        return "N/A";
++    }
++}
++
++static int
++getMCS(MACHTTRANSMIT_SETTING HTSetting)
++{
++    int mcs_1ss = (int)HTSetting.field.MCS;
++
++    if (HTSetting.field.MODE >= MODE_VHT) {
++        if (mcs_1ss > 9)
++            mcs_1ss %= 16;
++    }
++
++    return mcs_1ss;
++}
++
++static const int
++MCSMappingRateTable[] =
++{
++    2,  4,   11,  22,								// CCK
++
++    12,  18,  24,  36,  48,  72,  96, 108,						// OFDM
++
++    13,  26,  39,  52,  78, 104, 117, 130, 26,  52,  78, 104, 156, 208, 234, 260,	// 11n: 20MHz, 800ns GI, MCS: 0 ~ 15
++    39,  78, 117, 156, 234, 312, 351, 390,						// 11n: 20MHz, 800ns GI, MCS: 16 ~ 23
++    27,  54,  81, 108, 162, 216, 243, 270, 54, 108, 162, 216, 324, 432, 486, 540,	// 11n: 40MHz, 800ns GI, MCS: 0 ~ 15
++    81, 162, 243, 324, 486, 648, 729, 810,						// 11n: 40MHz, 800ns GI, MCS: 16 ~ 23
++    14,  29,  43,  57,  87, 115, 130, 144, 29, 59,   87, 115, 173, 230, 260, 288,	// 11n: 20MHz, 400ns GI, MCS: 0 ~ 15
++    43,  87, 130, 173, 260, 317, 390, 433,						// 11n: 20MHz, 400ns GI, MCS: 16 ~ 23
++    30,  60,  90, 120, 180, 240, 270, 300, 60, 120, 180, 240, 360, 480, 540, 600,	// 11n: 40MHz, 400ns GI, MCS: 0 ~ 15
++    90, 180, 270, 360, 540, 720, 810, 900,
++
++    13,  26,  39,  52,  78, 104, 117, 130, 156,					// 11ac: 20Mhz, 800ns GI, MCS: 0~8
++    27,  54,  81, 108, 162, 216, 243, 270, 324, 360,				// 11ac: 40Mhz, 800ns GI, MCS: 0~9
++    59, 117, 176, 234, 351, 468, 527, 585, 702, 780,				// 11ac: 80Mhz, 800ns GI, MCS: 0~9
++    14,  29,  43,  57,  87, 115, 130, 144, 173,					// 11ac: 20Mhz, 400ns GI, MCS: 0~8
++    30,  60,  90, 120, 180, 240, 270, 300, 360, 400,				// 11ac: 40Mhz, 400ns GI, MCS: 0~9
++    65, 130, 195, 260, 390, 520, 585, 650, 780, 867					// 11ac: 80Mhz, 400ns GI, MCS: 0~9
++};
++
++static int
++getRate(MACHTTRANSMIT_SETTING HTSetting)
++{
++    int rate_count = sizeof(MCSMappingRateTable)/sizeof(int);
++    int rate_index = 0;
++    int num_ss_vht = 1;
++
++    if (HTSetting.field.MODE >= MODE_VHT) {
++        int mcs_1ss = (int)HTSetting.field.MCS;
++
++        if (mcs_1ss > 9) {
++            num_ss_vht = (mcs_1ss / 16) + 1;
++            mcs_1ss %= 16;
++        }
++        if (HTSetting.field.BW == BW_20)
++            rate_index = 108 + ((unsigned char)HTSetting.field.ShortGI * 29) + mcs_1ss;
++        else if (HTSetting.field.BW == BW_40)
++            rate_index = 117 + ((unsigned char)HTSetting.field.ShortGI * 29) + mcs_1ss;
++        else if (HTSetting.field.BW == BW_80)
++            rate_index = 127 + ((unsigned char)HTSetting.field.ShortGI * 29) + mcs_1ss;
++    }
++    else if (HTSetting.field.MODE >= MODE_HTMIX)
++        rate_index = 12 + ((unsigned char)HTSetting.field.BW * 24) + ((unsigned char)HTSetting.field.ShortGI * 48) + ((unsigned char)HTSetting.field.MCS);
++    else if (HTSetting.field.MODE == MODE_OFDM)
++        rate_index = (unsigned char)(HTSetting.field.MCS) + 4;
++    else if (HTSetting.field.MODE == MODE_CCK)
++        rate_index = (unsigned char)(HTSetting.field.MCS);
++
++    if (rate_index < 0)
++        rate_index = 0;
++
++    if (rate_index >= rate_count)
++        rate_index = rate_count-1;
++
++    return (MCSMappingRateTable[rate_index] * num_ss_vht * 5)/10;
++}
++
++static double mt76x0_freq2float(const struct iw_freq *in)
++{
++    int		i;
++    double	res = (double) in->m;
++    for(i = 0; i < in->e; i++) res *= 10;
++    return res;
++}
++
++int
++mt76x0_freq_to_channel(double			freq,
++                        const struct iw_range *	range)
++{
++    double	ref_freq;
++    int		k;
++
++    /* Check if it's a frequency or not already a channel */
++    if(freq < KILO)
++        return(-1);
++
++    /* We compare the frequencies as double to ignore differences
++     * in encoding. Slower, but safer... */
++    for(k = 0; k < range->num_frequency; k++)
++    {
++        ref_freq = mt76x0_freq2float(&(range->freq[k]));
++        if(freq == ref_freq)
++            return(range->freq[k].i);
++    }
++    /* Not found */
++    return(-2);
++}
++
++int
++mt76x0_channel_to_freq(int				channel,
++                        double *			pfreq,
++                        const struct iw_range *	range)
++{
++    int		has_freq = 0;
++    int		k;
++
++    /* Check if the driver support only channels or if it has frequencies */
++    for(k = 0; k < range->num_frequency; k++)
++    {
++        if((range->freq[k].e != 0) || (range->freq[k].m > (int) KILO))
++            has_freq = 1;
++    }
++    if(!has_freq)
++        return(-1);
++
++    /* Find the correct frequency in the list */
++    for(k = 0; k < range->num_frequency; k++)
++    {
++        if(range->freq[k].i == channel)
++        {
++            *pfreq = mt76x0_freq2float(&(range->freq[k]));
++            return(channel);
++        }
++    }
++    /* Not found */
++    return(-2);
++}
++
++static inline int mt76x0_freq2mhz(const struct iw_freq *in)
++{
++    int i;
++
++    if( in->e == 6 )
++    {
++        return in->m;
++    }
++    else
++    {
++        return (int)(mt76x0_freq2float(in) / 1000000);
++    }
++}
++
++int CH_HZ_ID_MAP_NUM = (sizeof(CH_HZ_ID_MAP)/sizeof(CH_FREQ_MAP));
++
++static int mt76x0_get_assoclist(const char *ifname, char *buf, int *len);
++
++void mt76x0_ch2freq(
++    unsigned char Ch,
++    double *pFreq)
++{
++    int chIdx;
++    for (chIdx = 0; chIdx < CH_HZ_ID_MAP_NUM; chIdx++)
++    {
++        if ((Ch) == CH_HZ_ID_MAP[chIdx].channel)
++        {
++            (*pFreq) = CH_HZ_ID_MAP[chIdx].freqKHz * 1000;
++            break;
++        }
++    }
++    if (chIdx == CH_HZ_ID_MAP_NUM)
++        (*pFreq) = 2412000;
++}
++
++static inline int mt76x0_ioctl(const char *ifname, int cmd, struct iwreq *wrq)
++{
++    if( !strncmp(ifname, "mon.", 4) )
++        strncpy(wrq->ifr_name, &ifname[4], IFNAMSIZ);
++    else
++        strncpy(wrq->ifr_name, ifname, IFNAMSIZ);
++
++    return iwinfo_ioctl(cmd, wrq);
++}
++
++
++static int mt76x0_probe(const char *ifname)
++{
++    struct iwreq wrq;
++
++    if(mt76x0_ioctl(ifname, SIOCGIWNAME, &wrq) >= 0)
++        return 1;
++
++    return 0;
++}
++
++static void mt76x0_close(void)
++{
++    /* Nop */
++}
++
++static int mt76x0_get_mode(const char *ifname, int *buf)
++{
++    *buf = strncmp(ifname,"ra",2)?IWINFO_OPMODE_CLIENT:IWINFO_OPMODE_MASTER;
++    return 0;
++}
++
++static int mt76x0_get_ssid(const char *ifname, char *buf)
++{
++    struct iwreq wrq;
++
++    wrq.u.essid.pointer = (caddr_t) buf;
++    wrq.u.essid.length  = IW_ESSID_MAX_SIZE + 1;
++    wrq.u.essid.flags   = 0;
++
++    if(mt76x0_ioctl(ifname, SIOCGIWESSID, &wrq) >= 0)
++        return 0;
++
++    return -1;
++}
++
++static int mt76x0_get_bssid(const char *ifname, char *buf)
++{
++    struct iwreq wrq;
++
++    if(mt76x0_ioctl(ifname, SIOCGIWAP, &wrq) >= 0)
++    {
++        sprintf(buf, "%02X:%02X:%02X:%02X:%02X:%02X",
++                (uint8_t)wrq.u.ap_addr.sa_data[0], (uint8_t)wrq.u.ap_addr.sa_data[1],
++                (uint8_t)wrq.u.ap_addr.sa_data[2], (uint8_t)wrq.u.ap_addr.sa_data[3],
++                (uint8_t)wrq.u.ap_addr.sa_data[4], (uint8_t)wrq.u.ap_addr.sa_data[5]);
++
++        return 0;
++    }
++
++    return -1;
++}
++
++static int mt76x0_get_bitrate(const char *ifname, int *buf)
++{
++    struct iwreq wrq;
++
++    if(mt76x0_ioctl(ifname, SIOCGIWRATE, &wrq) >= 0)
++    {
++        *buf = (wrq.u.bitrate.value / 1000);
++        return 0;
++    }
++
++    return -1;
++}
++
++static int mt76x0_get_channel(const char *ifname, int *buf)
++{
++    struct iwreq wrq;
++    struct iw_range range;
++    double freq;
++    int i;
++
++    if(mt76x0_ioctl(ifname, SIOCGIWFREQ, &wrq) >= 0)
++    {
++        freq = mt76x0_freq2float(&wrq.u.freq);
++        *buf = freq;
++        return 0;
++    }
++
++    return -1;
++}
++
++static int mt76x0_get_frequency(const char *ifname, int *buf)
++{
++    double freq;
++    int i, channel;
++
++    i = mt76x0_get_channel(ifname, &channel);
++    mt76x0_ch2freq(channel, &freq);
++    *buf = (int)freq/1000;
++
++    return 0;
++}
++
++static int mt76x0_get_txpower(const char *ifname, int *buf)
++{
++    struct iwreq wrq;
++
++    wrq.u.txpower.flags = 0;
++
++    if(mt76x0_ioctl(ifname, SIOCGIWTXPOW, &wrq) >= 0)
++    {
++        if(wrq.u.txpower.flags & IW_TXPOW_MWATT)
++            *buf = iwinfo_mw2dbm(wrq.u.txpower.value);
++        else
++            *buf = wrq.u.txpower.value;
++
++        return 0;
++    }
++
++    return -1;
++}
++
++static int mt76x0_get_signal(const char *ifname, int *buf)
++{
++    int i, len;
++    char abuf[IWINFO_BUFSIZE];
++    struct iwinfo_assoclist_entry *e;
++
++    i = mt76x0_get_assoclist(ifname, abuf, &len);
++    if (i<=0)
++        return -1;
++    *buf = i - 127;
++    return 0;
++}
++
++static int mt76x0_get_noise(const char *ifname, int *buf)
++{
++    *buf = 0;
++    return 0;
++}
++
++static int mt76x0_get_quality(const char *ifname, int *buf)
++{
++    int i, len;
++    char abuf[IWINFO_BUFSIZE];
++    struct iwinfo_assoclist_entry *e;
++
++    i = 10 + mt76x0_get_assoclist(ifname, abuf, &len);
++    if (i<=10)
++        return -1;
++    if (i > 100)
++        i = 100;
++    *buf = i;
++    return 0;
++}
++
++static int mt76x0_get_quality_max(const char *ifname, int *buf)
++{
++    *buf = 100;
++    return 0;
++}
++
++#define RTPRIV_IOCTL_GET_MAC_TABLE_STRUCT	(SIOCIWFIRSTPRIV + 0x1F)
++
++static int mt76x0_get_assoclist(const char *ifname, char *buf, int *len)
++{
++    struct	iwreq wrq;
++    int ret, i, rssi, quality, maxrssi=-127;
++    RT_802_11_MAC_TABLE *mp;
++    char mac_table_data[4096];
++    struct iwinfo_assoclist_entry entry;
++    MACHTTRANSMIT_SETTING rx;
++
++    bzero(mac_table_data, sizeof(mac_table_data));
++    wrq.u.data.pointer = mac_table_data;
++    wrq.u.data.length = sizeof(mac_table_data);
++    wrq.u.data.flags = 0;
++
++    if (mt76x0_ioctl(ifname, RTPRIV_IOCTL_GET_MAC_TABLE_STRUCT, &wrq) >= 0) {
++	int count = 0;
++        mp = (RT_802_11_MAC_TABLE *) wrq.u.data.pointer;
++        for(i=0; i < mp->Num; i++) {
++	    char* s = ifname;
++	    char* p = s;
++	    char* end = s;
++	    long num;
++	    p--;    
++	    do {
++		p++;
++		num = strtol (p,&end,10);
++	    } while ( (p == end) && ( p < (s+strlen(s)) ) ) ;
++	    if ( p >= (s+strlen(s)) )
++		{
++		printf ("iwinfo debug: wrong ifname: %s\n", ifname);
++		break;
++		}
++//	    else
++//		printf ("iwinfo debug: ifname: %s, idx: %d",ifname, num);
++
++	    if ((int)mp->Entry[i].ApIdx != num)
++		continue;
++	    count++;
++            rssi = -127;
++            rssi = (int)mp->Entry[i].AvgRssi0;
++            if ((int)mp->Entry[i].AvgRssi1 > rssi && mp->Entry[i].AvgRssi1 != 0)
++                rssi = (int)mp->Entry[i].AvgRssi1;
++            if ((int)mp->Entry[i].AvgRssi2 > rssi && mp->Entry[i].AvgRssi2 != 0)
++                rssi = (int)mp->Entry[i].AvgRssi2;
++            rx.word = mp->Entry[i].LastRxRate;
++            memset(&entry, 0, sizeof(entry));
++            memcpy(entry.mac, mp->Entry[i].Addr, MAC_ADDR_LENGTH);
++            entry.signal = rssi;
++            if (maxrssi < rssi)
++                maxrssi = rssi;
++            entry.tx_rate.rate = getRate(mp->Entry[i].TxRate)*1000;
++            entry.tx_rate.mcs = getMCS(mp->Entry[i].TxRate);
++            entry.tx_rate.is_40mhz = GetBW(mp->Entry[i].TxRate.field.BW) == 4 ? 1 : 0;
++            if (
++                !strcmp(GetPhyMode(mp->Entry[i].TxRate.field.MODE),"HTMIX")
++                ||
++                !strcmp(GetPhyMode(mp->Entry[i].TxRate.field.MODE),"HT_GF")
++                ||
++                !strcmp(GetPhyMode(mp->Entry[i].TxRate.field.MODE),"OFDM")
++            )
++            {
++                entry.tx_rate.is_ht = 1;
++            } else {
++                entry.tx_rate.is_ht = 0;
++            }
++            if (!strcmp(GetPhyMode(mp->Entry[i].TxRate.field.MODE),"VHT")) {
++                entry.tx_rate.is_vht = 1;
++            }
++            else {
++                entry.tx_rate.is_vht = 0;
++            }
++            entry.tx_rate.is_short_gi = mp->Entry[i].TxRate.field.ShortGI ? 1 : 0;
++            entry.tx_rate.mhz = GetBW(mp->Entry[i].TxRate.field.BW)*10;
++
++            entry.rx_rate.rate = getRate(rx)*1000;
++            entry.rx_rate.mcs = getMCS(rx);
++            entry.rx_rate.is_40mhz = GetBW(rx.field.BW) == 4 ? 1 : 0;;
++            if (
++                !strcmp(GetPhyMode(rx.field.MODE),"HTMIX")
++                ||
++                !strcmp(GetPhyMode(rx.field.MODE),"HT_GF")
++                ||
++                !strcmp(GetPhyMode(rx.field.MODE),"OFDM")
++            )
++            {
++                entry.rx_rate.is_ht = 1;
++            } else {
++                entry.rx_rate.is_ht = 0;
++            }
++            if (!strcmp(GetPhyMode(rx.field.MODE), "VHT")) {
++                entry.rx_rate.is_vht = 1;
++            }
++            else {
++                entry.rx_rate.is_vht = 0;
++            }
++            entry.rx_rate.is_short_gi = rx.field.ShortGI ? 1 : 0;
++            entry.rx_rate.mhz = GetBW(rx.field.BW)*10;
++
++            memcpy(&buf[(count-1)*sizeof(entry)], &entry, sizeof(entry));
++        }
++        *len = (count)*sizeof(entry);
++    }
++    quality = (int) 127 + maxrssi;
++    return quality;
++}
++
++static int mt76x0_get_txpwrlist(const char *ifname, char *buf, int *len)
++{
++    struct iwreq wrq;
++    struct iw_range range;
++    struct iwinfo_txpwrlist_entry entry;
++    int i;
++
++    wrq.u.data.pointer = (caddr_t) &range;
++    wrq.u.data.length  = sizeof(struct iw_range);
++    wrq.u.data.flags   = 0;
++
++    if( (mt76x0_ioctl(ifname, SIOCGIWRANGE, &wrq) >= 0) &&
++            (range.num_txpower > 0) && (range.num_txpower <= IW_MAX_TXPOWER) &&
++            !(range.txpower_capa & IW_TXPOW_RELATIVE)
++      ) {
++        for( i = 0; i < range.num_txpower; i++ )
++        {
++            if( range.txpower_capa & IW_TXPOW_MWATT )
++            {
++                entry.dbm = iwinfo_mw2dbm(range.txpower[i]);
++                entry.mw  = range.txpower[i];
++            }
++
++            /* Madwifi does neither set mW not dBm caps, also iwlist assumes
++             * dBm if mW is not set, so don't check here... */
++            else /* if( range.txpower_capa & IW_TXPOW_DBM ) */
++            {
++                entry.dbm = range.txpower[i];
++                entry.mw  = iwinfo_dbm2mw(range.txpower[i]);
++            }
++
++            memcpy(&buf[i*sizeof(entry)], &entry, sizeof(entry));
++        }
++
++        *len = i * sizeof(entry);
++        return 0;
++    }
++
++    return -1;
++}
++
++static int mt76x0_get_freqlist(const char *ifname, char *buf, int *len)
++{
++    struct iwreq wrq;
++    struct iw_range range;
++    struct iwinfo_freqlist_entry entry;
++    char buffer[sizeof(iwrange) * 2];
++    int i, bl;
++
++    wrq.u.data.pointer = (caddr_t) buffer;
++    wrq.u.data.length = sizeof(buffer);
++    wrq.u.data.flags = 0;
++
++    if(mt76x0_ioctl(ifname, SIOCGIWRANGE, &wrq) >= 0)
++    {
++        if (ralink_get_range_info(&range, buffer, wrq.u.data.length) < 0)
++            return -1;
++
++        bl = 0;
++        char mes[128];
++        sprintf(mes,"num_freq: %d", range.num_frequency);
++        for(i = 0; i < range.num_frequency; i++)
++        {
++            entry.mhz        = mt76x0_freq2mhz(&range.freq[i]);
++            entry.channel    = range.freq[i].i;
++            entry.restricted = 0;
++
++            memcpy(&buf[bl], &entry, sizeof(struct iwinfo_freqlist_entry));
++            bl += sizeof(struct iwinfo_freqlist_entry);
++        }
++
++        *len = bl;
++        return 0;
++    }
++    return -1;
++}
++
++static int mt76x0_get_country(const char *ifname, char *buf)
++{
++    sprintf(buf, "00");
++    return 0;
++}
++
++static int mt76x0_get_countrylist(const char *ifname, char *buf, int *len)
++{
++    /* Stub */
++    return -1;
++}
++
++static int mt76x0_get_hwmodelist(const char *ifname, int *buf)
++{
++    *buf = 0;
++
++    if ((strcmp(ifname, "ra0") == 0) || (strcmp(ifname, "apcli0") == 0)) {
++        *buf |= IWINFO_80211_B;
++        *buf |= IWINFO_80211_G;
++        *buf |= IWINFO_80211_N;
++        return 0;
++    }
++    if ((strcmp(ifname, "rai0") == 0) || (strcmp(ifname, "apclii0") == 0)) {
++        *buf |= IWINFO_80211_A;
++        *buf |= IWINFO_80211_AC;
++        *buf |= IWINFO_80211_N;
++        return 0;
++    }
++    return -1;
++}
++
++static int mt76x0_get_encryption(const char *ifname, char *buf)
++{
++    /* No reliable crypto info in wext */
++    return -1;
++}
++
++static int mt76x0_get_phyname(const char *ifname, char *buf)
++{
++    /* No suitable api in wext */
++    strcpy(buf, ifname);
++    return 0;
++}
++
++static int mt76x0_get_mbssid_support(const char *ifname, int *buf)
++{
++    /* No multi bssid support atm */
++    *buf = 1;
++    return -1;
++}
++
++static char * mt76x0_sysfs_ifname_file(const char *ifname, const char *path)
++{
++    FILE *f;
++    static char buf[128];
++    char *rv = NULL;
++
++    snprintf(buf, sizeof(buf), "/sys/class/net/%s/%s", ifname, path);
++
++    if ((f = fopen(buf, "r")) != NULL)
++    {
++        memset(buf, 0, sizeof(buf));
++
++        if (fread(buf, 1, sizeof(buf), f))
++            rv = buf;
++
++        fclose(f);
++    }
++
++    return rv;
++}
++
++static int mt76x0_get_htmodelist(const char *ifname, int *buf)
++{
++    /* Stub */
++    return -1;
++}
++
++static int mt76x0_get_hardware_id(const char *ifname, char *buf)
++{
++    char *data;
++    struct iwinfo_hardware_id *id = (struct iwinfo_hardware_id *)buf;
++
++    memset(id, 0, sizeof(struct iwinfo_hardware_id));
++
++    data = mt76x0_sysfs_ifname_file(ifname, "device/vendor");
++    if (data)
++        id->vendor_id = strtoul(data, NULL, 16);
++
++    data = mt76x0_sysfs_ifname_file(ifname, "device/device");
++    if (data)
++        id->device_id = strtoul(data, NULL, 16);
++
++    data = mt76x0_sysfs_ifname_file(ifname, "device/subsystem_device");
++    if (data)
++        id->subsystem_device_id = strtoul(data, NULL, 16);
++
++    data = mt76x0_sysfs_ifname_file(ifname, "device/subsystem_vendor");
++    if (data)
++        id->subsystem_vendor_id = strtoul(data, NULL, 16);
++
++    return (id->vendor_id > 0 && id->device_id > 0) ? 0 : -1;
++}
++
++static int mt76x0_get_hardware_name(const char *ifname, char *buf)
++{
++    sprintf(buf, "MediaTek MT7610E");
++    return 0;
++}
++
++static int mt76x0_get_txpower_offset(const char *ifname, int *buf)
++{
++    /* Stub */
++    *buf = 0;
++    return -1;
++}
++
++static int mt76x0_get_frequency_offset(const char *ifname, int *buf)
++{
++    /* Stub */
++    *buf = 0;
++    return -1;
++}
++
++const struct iwinfo_ops mt76x0_ops = {
++    .name             = "mt76x0",
++    .probe            = mt76x0_probe,
++    .channel          = mt76x0_get_channel,
++    .frequency        = mt76x0_get_frequency,
++    .frequency_offset = mt76x0_get_frequency_offset,
++    .txpower          = mt76x0_get_txpower,
++    .txpower_offset   = mt76x0_get_txpower_offset,
++    .bitrate          = mt76x0_get_bitrate,
++    .signal           = mt76x0_get_signal,
++    .noise            = mt76x0_get_noise,
++    .quality          = mt76x0_get_quality,
++    .quality_max      = mt76x0_get_quality_max,
++    .mbssid_support   = mt76x0_get_mbssid_support,
++    .hwmodelist       = mt76x0_get_hwmodelist,
++    .htmodelist       = mt76x0_get_htmodelist,
++    .mode             = mt76x0_get_mode,
++    .ssid             = mt76x0_get_ssid,
++    .bssid            = mt76x0_get_bssid,
++    .country          = mt76x0_get_country,
++    .hardware_id      = mt76x0_get_hardware_id,
++    .hardware_name    = mt76x0_get_hardware_name,
++    .encryption       = mt76x0_get_encryption,
++    .phyname          = mt76x0_get_phyname,
++    .assoclist        = mt76x0_get_assoclist,
++    .txpwrlist        = mt76x0_get_txpwrlist,
++    .scanlist         = mt76x0_get_scanlist,
++    .freqlist         = mt76x0_get_freqlist,
++    .countrylist      = mt76x0_get_countrylist,
++    .close            = mt76x0_close
++};
++
+diff --git a/iwinfo_mt76x0.h b/iwinfo_mt76x0.h
+new file mode 100644
+index 0000000..f446fb7
+--- /dev/null
++++ b/iwinfo_mt76x0.h
+@@ -0,0 +1,474 @@
++/*
++ * iwinfo - Wireless Information Library - Linux Wireless Extension Headers
++ *
++ *   Copyright (C) 2009-2010 Jo-Philipp Wich <xm@subsignal.org>
++ *
++ * The iwinfo library is free software: you can redistribute it and/or
++ * modify it under the terms of the GNU General Public License version 2
++ * as published by the Free Software Foundation.
++ *
++ * The iwinfo library is distributed in the hope that it will be useful,
++ * but WITHOUT ANY WARRANTY; without even the implied warranty of
++ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
++ * See the GNU General Public License for more details.
++ *
++ * You should have received a copy of the GNU General Public License along
++ * with the iwinfo library. If not, see http://www.gnu.org/licenses/.
++ */
++
++#ifndef __IWINFO_MT76X0_SCAN_H_
++#define __IWINFO_MT76X0_SCAN_H_
++
++#include <sys/types.h>
++#include <linux/types.h>
++#include <fcntl.h>
++
++#include "iwinfo.h"
++#include "iwinfo/utils.h"
++#include "api/wext.h"
++#include "api/mtk.h"
++
++/* Shortcuts */
++typedef struct iw_statistics	iwstats;
++typedef struct iw_range		iwrange;
++typedef struct iw_param		iwparam;
++typedef struct iw_freq		iwfreq;
++typedef struct iw_quality	iwqual;
++typedef struct iw_priv_args	iwprivargs;
++typedef struct sockaddr		sockaddr;
++
++
++typedef struct stream_descr
++{
++    char *        end;            /* End of the stream */
++    char *        current;        /* Current event in stream of events */
++    char *        value;          /* Current value in event */
++} stream_descr;
++
++/*
++ * Describe how a standard IOCTL looks like.
++ */
++struct iw_ioctl_description
++{
++    uint8_t	header_type;		/* NULL, iw_point or other */
++    uint8_t	token_type;		/* Future */
++    uint16_t	token_size;		/* Granularity of payload */
++    uint16_t	min_tokens;		/* Min acceptable token number */
++    uint16_t	max_tokens;		/* Max acceptable token number */
++    uint32_t	flags;			/* Special handling of the request */
++};
++
++/* Type of headers we know about (basically union iwreq_data) */
++#define IW_HEADER_TYPE_NULL	0	/* Not available */
++#define IW_HEADER_TYPE_CHAR	2	/* char [IFNAMSIZ] */
++#define IW_HEADER_TYPE_UINT	4	/* __u32 */
++#define IW_HEADER_TYPE_FREQ	5	/* struct iw_freq */
++#define IW_HEADER_TYPE_ADDR	6	/* struct sockaddr */
++#define IW_HEADER_TYPE_POINT	8	/* struct iw_point */
++#define IW_HEADER_TYPE_PARAM	9	/* struct iw_param */
++#define IW_HEADER_TYPE_QUAL	10	/* struct iw_quality */
++
++/* Handling flags */
++/* Most are not implemented. I just use them as a reminder of some
++ * cool features we might need one day ;-) */
++#define IW_DESCR_FLAG_NONE	0x0000	/* Obvious */
++/* Wrapper level flags */
++#define IW_DESCR_FLAG_DUMP	0x0001	/* Not part of the dump command */
++#define IW_DESCR_FLAG_EVENT	0x0002	/* Generate an event on SET */
++#define IW_DESCR_FLAG_RESTRICT	0x0004	/* GET : request is ROOT only */
++/* SET : Omit payload from generated iwevent */
++#define IW_DESCR_FLAG_NOMAX	0x0008	/* GET : no limit on request size */
++/* Driver level flags */
++#define IW_DESCR_FLAG_WAIT	0x0100	/* Wait for driver event */
++
++
++/*
++ * Meta-data about all the standard Wireless Extension request we
++ * know about.
++ */
++static const struct iw_ioctl_description standard_ioctl_descr[] = {
++    [SIOCSIWCOMMIT	- SIOCIWFIRST] = {
++        .header_type	= IW_HEADER_TYPE_NULL,
++    },
++    [SIOCGIWNAME	- SIOCIWFIRST] = {
++        .header_type	= IW_HEADER_TYPE_CHAR,
++        .flags		= IW_DESCR_FLAG_DUMP,
++    },
++    [SIOCSIWNWID	- SIOCIWFIRST] = {
++        .header_type	= IW_HEADER_TYPE_PARAM,
++        .flags		= IW_DESCR_FLAG_EVENT,
++    },
++    [SIOCGIWNWID	- SIOCIWFIRST] = {
++        .header_type	= IW_HEADER_TYPE_PARAM,
++        .flags		= IW_DESCR_FLAG_DUMP,
++    },
++    [SIOCSIWFREQ	- SIOCIWFIRST] = {
++        .header_type	= IW_HEADER_TYPE_FREQ,
++        .flags		= IW_DESCR_FLAG_EVENT,
++    },
++    [SIOCGIWFREQ	- SIOCIWFIRST] = {
++        .header_type	= IW_HEADER_TYPE_FREQ,
++        .flags		= IW_DESCR_FLAG_DUMP,
++    },
++    [SIOCSIWMODE	- SIOCIWFIRST] = {
++        .header_type	= IW_HEADER_TYPE_UINT,
++        .flags		= IW_DESCR_FLAG_EVENT,
++    },
++    [SIOCGIWMODE	- SIOCIWFIRST] = {
++        .header_type	= IW_HEADER_TYPE_UINT,
++        .flags		= IW_DESCR_FLAG_DUMP,
++    },
++    [SIOCSIWSENS	- SIOCIWFIRST] = {
++        .header_type	= IW_HEADER_TYPE_PARAM,
++    },
++    [SIOCGIWSENS	- SIOCIWFIRST] = {
++        .header_type	= IW_HEADER_TYPE_PARAM,
++    },
++    [SIOCSIWRANGE	- SIOCIWFIRST] = {
++        .header_type	= IW_HEADER_TYPE_NULL,
++    },
++    [SIOCGIWRANGE	- SIOCIWFIRST] = {
++        .header_type	= IW_HEADER_TYPE_POINT,
++        .token_size	= 1,
++        .max_tokens	= sizeof(struct iw_range),
++        .flags		= IW_DESCR_FLAG_DUMP,
++    },
++    [SIOCSIWPRIV	- SIOCIWFIRST] = {
++        .header_type	= IW_HEADER_TYPE_NULL,
++    },
++    [SIOCGIWPRIV	- SIOCIWFIRST] = { /* (handled directly by us) */
++        .header_type	= IW_HEADER_TYPE_NULL,
++    },
++    [SIOCSIWSTATS	- SIOCIWFIRST] = {
++        .header_type	= IW_HEADER_TYPE_NULL,
++    },
++    [SIOCGIWSTATS	- SIOCIWFIRST] = { /* (handled directly by us) */
++        .header_type	= IW_HEADER_TYPE_NULL,
++        .flags		= IW_DESCR_FLAG_DUMP,
++    },
++    [SIOCSIWSPY	- SIOCIWFIRST] = {
++        .header_type	= IW_HEADER_TYPE_POINT,
++        .token_size	= sizeof(struct sockaddr),
++        .max_tokens	= IW_MAX_SPY,
++    },
++    [SIOCGIWSPY	- SIOCIWFIRST] = {
++        .header_type	= IW_HEADER_TYPE_POINT,
++        .token_size	= sizeof(struct sockaddr) +
++        sizeof(struct iw_quality),
++        .max_tokens	= IW_MAX_SPY,
++    },
++    [SIOCSIWTHRSPY	- SIOCIWFIRST] = {
++        .header_type	= IW_HEADER_TYPE_POINT,
++        .token_size	= sizeof(struct iw_thrspy),
++        .min_tokens	= 1,
++        .max_tokens	= 1,
++    },
++    [SIOCGIWTHRSPY	- SIOCIWFIRST] = {
++        .header_type	= IW_HEADER_TYPE_POINT,
++        .token_size	= sizeof(struct iw_thrspy),
++        .min_tokens	= 1,
++        .max_tokens	= 1,
++    },
++    [SIOCSIWAP	- SIOCIWFIRST] = {
++        .header_type	= IW_HEADER_TYPE_ADDR,
++    },
++    [SIOCGIWAP	- SIOCIWFIRST] = {
++        .header_type	= IW_HEADER_TYPE_ADDR,
++        .flags		= IW_DESCR_FLAG_DUMP,
++    },
++    [SIOCSIWMLME	- SIOCIWFIRST] = {
++        .header_type	= IW_HEADER_TYPE_POINT,
++        .token_size	= 1,
++        .min_tokens	= sizeof(struct iw_mlme),
++        .max_tokens	= sizeof(struct iw_mlme),
++    },
++    [SIOCGIWAPLIST	- SIOCIWFIRST] = {
++        .header_type	= IW_HEADER_TYPE_POINT,
++        .token_size	= sizeof(struct sockaddr) +
++        sizeof(struct iw_quality),
++        .max_tokens	= IW_MAX_AP,
++        .flags		= IW_DESCR_FLAG_NOMAX,
++    },
++    [SIOCSIWSCAN	- SIOCIWFIRST] = {
++        .header_type	= IW_HEADER_TYPE_POINT,
++        .token_size	= 1,
++        .min_tokens	= 0,
++        .max_tokens	= sizeof(struct iw_scan_req),
++    },
++    [SIOCGIWSCAN	- SIOCIWFIRST] = {
++        .header_type	= IW_HEADER_TYPE_POINT,
++        .token_size	= 1,
++        .max_tokens	= IW_SCAN_MAX_DATA,
++        .flags		= IW_DESCR_FLAG_NOMAX,
++    },
++    [SIOCSIWESSID	- SIOCIWFIRST] = {
++        .header_type	= IW_HEADER_TYPE_POINT,
++        .token_size	= 1,
++        .max_tokens	= IW_ESSID_MAX_SIZE + 1,
++        .flags		= IW_DESCR_FLAG_EVENT,
++    },
++    [SIOCGIWESSID	- SIOCIWFIRST] = {
++        .header_type	= IW_HEADER_TYPE_POINT,
++        .token_size	= 1,
++        .max_tokens	= IW_ESSID_MAX_SIZE + 1,
++        .flags		= IW_DESCR_FLAG_DUMP,
++    },
++    [SIOCSIWNICKN	- SIOCIWFIRST] = {
++        .header_type	= IW_HEADER_TYPE_POINT,
++        .token_size	= 1,
++        .max_tokens	= IW_ESSID_MAX_SIZE + 1,
++    },
++    [SIOCGIWNICKN	- SIOCIWFIRST] = {
++        .header_type	= IW_HEADER_TYPE_POINT,
++        .token_size	= 1,
++        .max_tokens	= IW_ESSID_MAX_SIZE + 1,
++    },
++    [SIOCSIWRATE	- SIOCIWFIRST] = {
++        .header_type	= IW_HEADER_TYPE_PARAM,
++    },
++    [SIOCGIWRATE	- SIOCIWFIRST] = {
++        .header_type	= IW_HEADER_TYPE_PARAM,
++    },
++    [SIOCSIWRTS	- SIOCIWFIRST] = {
++        .header_type	= IW_HEADER_TYPE_PARAM,
++    },
++    [SIOCGIWRTS	- SIOCIWFIRST] = {
++        .header_type	= IW_HEADER_TYPE_PARAM,
++    },
++    [SIOCSIWFRAG	- SIOCIWFIRST] = {
++        .header_type	= IW_HEADER_TYPE_PARAM,
++    },
++    [SIOCGIWFRAG	- SIOCIWFIRST] = {
++        .header_type	= IW_HEADER_TYPE_PARAM,
++    },
++    [SIOCSIWTXPOW	- SIOCIWFIRST] = {
++        .header_type	= IW_HEADER_TYPE_PARAM,
++    },
++    [SIOCGIWTXPOW	- SIOCIWFIRST] = {
++        .header_type	= IW_HEADER_TYPE_PARAM,
++    },
++    [SIOCSIWRETRY	- SIOCIWFIRST] = {
++        .header_type	= IW_HEADER_TYPE_PARAM,
++    },
++    [SIOCGIWRETRY	- SIOCIWFIRST] = {
++        .header_type	= IW_HEADER_TYPE_PARAM,
++    },
++    [SIOCSIWENCODE	- SIOCIWFIRST] = {
++        .header_type	= IW_HEADER_TYPE_POINT,
++        .token_size	= 1,
++        .max_tokens	= IW_ENCODING_TOKEN_MAX,
++        .flags		= IW_DESCR_FLAG_EVENT | IW_DESCR_FLAG_RESTRICT,
++    },
++    [SIOCGIWENCODE	- SIOCIWFIRST] = {
++        .header_type	= IW_HEADER_TYPE_POINT,
++        .token_size	= 1,
++        .max_tokens	= IW_ENCODING_TOKEN_MAX,
++        .flags		= IW_DESCR_FLAG_DUMP | IW_DESCR_FLAG_RESTRICT,
++    },
++    [SIOCSIWPOWER	- SIOCIWFIRST] = {
++        .header_type	= IW_HEADER_TYPE_PARAM,
++    },
++    [SIOCGIWPOWER	- SIOCIWFIRST] = {
++        .header_type	= IW_HEADER_TYPE_PARAM,
++    },
++    [SIOCSIWMODUL	- SIOCIWFIRST] = {
++        .header_type	= IW_HEADER_TYPE_PARAM,
++    },
++    [SIOCGIWMODUL	- SIOCIWFIRST] = {
++        .header_type	= IW_HEADER_TYPE_PARAM,
++    },
++    [SIOCSIWGENIE	- SIOCIWFIRST] = {
++        .header_type	= IW_HEADER_TYPE_POINT,
++        .token_size	= 1,
++        .max_tokens	= IW_GENERIC_IE_MAX,
++    },
++    [SIOCGIWGENIE	- SIOCIWFIRST] = {
++        .header_type	= IW_HEADER_TYPE_POINT,
++        .token_size	= 1,
++        .max_tokens	= IW_GENERIC_IE_MAX,
++    },
++    [SIOCSIWAUTH	- SIOCIWFIRST] = {
++        .header_type	= IW_HEADER_TYPE_PARAM,
++    },
++    [SIOCGIWAUTH	- SIOCIWFIRST] = {
++        .header_type	= IW_HEADER_TYPE_PARAM,
++    },
++    [SIOCSIWENCODEEXT - SIOCIWFIRST] = {
++        .header_type	= IW_HEADER_TYPE_POINT,
++        .token_size	= 1,
++        .min_tokens	= sizeof(struct iw_encode_ext),
++        .max_tokens	= sizeof(struct iw_encode_ext) +
++        IW_ENCODING_TOKEN_MAX,
++    },
++    [SIOCGIWENCODEEXT - SIOCIWFIRST] = {
++        .header_type	= IW_HEADER_TYPE_POINT,
++        .token_size	= 1,
++        .min_tokens	= sizeof(struct iw_encode_ext),
++        .max_tokens	= sizeof(struct iw_encode_ext) +
++        IW_ENCODING_TOKEN_MAX,
++    },
++    [SIOCSIWPMKSA - SIOCIWFIRST] = {
++        .header_type	= IW_HEADER_TYPE_POINT,
++        .token_size	= 1,
++        .min_tokens	= sizeof(struct iw_pmksa),
++        .max_tokens	= sizeof(struct iw_pmksa),
++    },
++};
++
++/*
++ * Meta-data about all the additional standard Wireless Extension events
++ * we know about.
++ */
++static const struct iw_ioctl_description standard_event_descr[] = {
++    [IWEVTXDROP	- IWEVFIRST] = {
++        .header_type	= IW_HEADER_TYPE_ADDR,
++    },
++    [IWEVQUAL	- IWEVFIRST] = {
++        .header_type	= IW_HEADER_TYPE_QUAL,
++    },
++    [IWEVCUSTOM	- IWEVFIRST] = {
++        .header_type	= IW_HEADER_TYPE_POINT,
++        .token_size	= 1,
++        .max_tokens	= IW_CUSTOM_MAX,
++    },
++    [IWEVREGISTERED	- IWEVFIRST] = {
++        .header_type	= IW_HEADER_TYPE_ADDR,
++    },
++    [IWEVEXPIRED	- IWEVFIRST] = {
++        .header_type	= IW_HEADER_TYPE_ADDR,
++    },
++    [IWEVGENIE	- IWEVFIRST] = {
++        .header_type	= IW_HEADER_TYPE_POINT,
++        .token_size	= 1,
++        .max_tokens	= IW_GENERIC_IE_MAX,
++    },
++    [IWEVMICHAELMICFAILURE	- IWEVFIRST] = {
++        .header_type	= IW_HEADER_TYPE_POINT,
++        .token_size	= 1,
++        .max_tokens	= sizeof(struct iw_michaelmicfailure),
++    },
++    [IWEVASSOCREQIE	- IWEVFIRST] = {
++        .header_type	= IW_HEADER_TYPE_POINT,
++        .token_size	= 1,
++        .max_tokens	= IW_GENERIC_IE_MAX,
++    },
++    [IWEVASSOCRESPIE	- IWEVFIRST] = {
++        .header_type	= IW_HEADER_TYPE_POINT,
++        .token_size	= 1,
++        .max_tokens	= IW_GENERIC_IE_MAX,
++    },
++    [IWEVPMKIDCAND	- IWEVFIRST] = {
++        .header_type	= IW_HEADER_TYPE_POINT,
++        .token_size	= 1,
++        .max_tokens	= sizeof(struct iw_pmkid_cand),
++    },
++};
++
++/* Size (in bytes) of various events */
++static const int event_type_size[] = {
++    IW_EV_LCP_PK_LEN,	/* IW_HEADER_TYPE_NULL */
++    0,
++    IW_EV_CHAR_PK_LEN,	/* IW_HEADER_TYPE_CHAR */
++    0,
++    IW_EV_UINT_PK_LEN,	/* IW_HEADER_TYPE_UINT */
++    IW_EV_FREQ_PK_LEN,	/* IW_HEADER_TYPE_FREQ */
++    IW_EV_ADDR_PK_LEN,	/* IW_HEADER_TYPE_ADDR */
++    0,
++    IW_EV_POINT_PK_LEN,	/* Without variable payload */
++    IW_EV_PARAM_PK_LEN,	/* IW_HEADER_TYPE_PARAM */
++    IW_EV_QUAL_PK_LEN,	/* IW_HEADER_TYPE_QUAL */
++};
++
++
++static const unsigned int standard_ioctl_num =
++    (sizeof(standard_ioctl_descr) / sizeof(struct iw_ioctl_description));
++
++static const unsigned int standard_event_num =
++    (sizeof(standard_event_descr) / sizeof(struct iw_ioctl_description));
++
++#define	IW_IE_CYPHER_NUM	8
++#define	IW_IE_KEY_MGMT_NUM	3
++
++/************************ CONSTANTS & MACROS ************************/
++
++/*
++ * Constants fof WE-9->15
++ */
++#define IW15_MAX_FREQUENCIES	16
++#define IW15_MAX_BITRATES	8
++#define IW15_MAX_TXPOWER	8
++#define IW15_MAX_ENCODING_SIZES	8
++#define IW15_MAX_SPY		8
++#define IW15_MAX_AP		8
++
++/****************************** TYPES ******************************/
++
++/*
++ *	Struct iw_range up to WE-15
++ */
++struct	iw15_range
++{
++    __u32		throughput;
++    __u32		min_nwid;
++    __u32		max_nwid;
++    __u16		num_channels;
++    __u8		num_frequency;
++    struct iw_freq	freq[IW15_MAX_FREQUENCIES];
++    __s32		sensitivity;
++    struct iw_quality	max_qual;
++    __u8		num_bitrates;
++    __s32		bitrate[IW15_MAX_BITRATES];
++    __s32		min_rts;
++    __s32		max_rts;
++    __s32		min_frag;
++    __s32		max_frag;
++    __s32		min_pmp;
++    __s32		max_pmp;
++    __s32		min_pmt;
++    __s32		max_pmt;
++    __u16		pmp_flags;
++    __u16		pmt_flags;
++    __u16		pm_capa;
++    __u16		encoding_size[IW15_MAX_ENCODING_SIZES];
++    __u8		num_encoding_sizes;
++    __u8		max_encoding_tokens;
++    __u16		txpower_capa;
++    __u8		num_txpower;
++    __s32		txpower[IW15_MAX_TXPOWER];
++    __u8		we_version_compiled;
++    __u8		we_version_source;
++    __u16		retry_capa;
++    __u16		retry_flags;
++    __u16		r_time_flags;
++    __s32		min_retry;
++    __s32		max_retry;
++    __s32		min_r_time;
++    __s32		max_r_time;
++    struct iw_quality	avg_qual;
++};
++
++/*
++ * Union for all the versions of iwrange.
++ * Fortunately, I mostly only add fields at the end, and big-bang
++ * reorganisations are few.
++ */
++union	iw_range_raw
++{
++    struct iw15_range	range15;	/* WE 9->15 */
++    struct iw_range		range;		/* WE 16->current */
++};
++
++/*
++ * Offsets in iw_range struct
++ */
++#define iwr15_off(f)	( ((char *) &(((struct iw15_range *) NULL)->f)) - \
++	      (char *) NULL)
++#define iwr_off(f)	( ((char *) &(((struct iw_range *) NULL)->f)) - \
++	      (char *) NULL)
++
++/* Disable runtime version warning in ralink_get_range_info() */
++//int	iw_ignore_version_sp = 1;
++
++int mt76x0_get_scanlist(const char *ifname, char *buf, int *len);
++
++#endif
+diff --git a/iwinfo_mt76x0_scan.c b/iwinfo_mt76x0_scan.c
+new file mode 100644
+index 0000000..45c8876
+--- /dev/null
++++ b/iwinfo_mt76x0_scan.c
+@@ -0,0 +1,495 @@
++/*
++ * iwinfo - Wireless Information Library - Linux Wireless Extension Backend
++ *
++ *   Copyright (C) 2009-2010 Jo-Philipp Wich <xm@subsignal.org>
++ *
++ * The iwinfo library is free software: you can redistribute it and/or
++ * modify it under the terms of the GNU General Public License version 2
++ * as published by the Free Software Foundation.
++ *
++ * The iwinfo library is distributed in the hope that it will be useful,
++ * but WITHOUT ANY WARRANTY; without even the implied warranty of
++ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
++ * See the GNU General Public License for more details.
++ *
++ * You should have received a copy of the GNU General Public License along
++ * with the iwinfo library. If not, see http://www.gnu.org/licenses/.
++ *
++ * Parts of this code are derived from the Linux wireless tools, iwlib.c,
++ * iwlist.c and iwconfig.c in particular.
++ */
++
++#include "iwinfo.h"
++#include "iwinfo_mt76x0.h"
++
++
++static int mt76x0_ioctl(const char *ifname, int cmd, struct iwreq *wrq)
++{
++    strncpy(wrq->ifr_name, ifname, IFNAMSIZ - 1);
++    return iwinfo_ioctl(cmd, wrq);
++}
++
++static inline double mt76x0_freq2float(const struct iw_freq *in)
++{
++    int		i;
++    double	res = (double) in->m;
++    for(i = 0; i < in->e; i++) res *= 10;
++    return res;
++}
++
++static inline int mt76x0_extract_event(struct stream_descr *stream, struct iw_event *iwe, int wev)
++{
++    const struct iw_ioctl_description *descr = NULL;
++    int event_type = 0;
++    unsigned int event_len = 1;
++    char *pointer;
++    unsigned cmd_index;		/* *MUST* be unsigned */
++
++    /* Check for end of stream */
++    if((stream->current + IW_EV_LCP_PK_LEN) > stream->end)
++        return 0;
++
++    /* Extract the event header (to get the event id).
++     * Note : the event may be unaligned, therefore copy... */
++    memcpy((char *) iwe, stream->current, IW_EV_LCP_PK_LEN);
++
++    /* Check invalid events */
++    if(iwe->len <= IW_EV_LCP_PK_LEN)
++        return -1;
++
++    /* Get the type and length of that event */
++    if(iwe->cmd <= SIOCIWLAST)
++    {
++        cmd_index = iwe->cmd - SIOCIWFIRST;
++        if(cmd_index < standard_ioctl_num)
++            descr = &(standard_ioctl_descr[cmd_index]);
++    }
++    else
++    {
++        cmd_index = iwe->cmd - IWEVFIRST;
++        if(cmd_index < standard_event_num)
++            descr = &(standard_event_descr[cmd_index]);
++    }
++
++    if(descr != NULL)
++        event_type = descr->header_type;
++
++    /* Unknown events -> event_type=0 => IW_EV_LCP_PK_LEN */
++    event_len = event_type_size[event_type];
++
++    /* Fixup for earlier version of WE */
++    if((wev <= 18) && (event_type == IW_HEADER_TYPE_POINT))
++        event_len += IW_EV_POINT_OFF;
++
++    /* Check if we know about this event */
++    if(event_len <= IW_EV_LCP_PK_LEN)
++    {
++        /* Skip to next event */
++        stream->current += iwe->len;
++        return 2;
++    }
++
++    event_len -= IW_EV_LCP_PK_LEN;
++
++    /* Set pointer on data */
++    if(stream->value != NULL)
++        pointer = stream->value;			/* Next value in event */
++    else
++        pointer = stream->current + IW_EV_LCP_PK_LEN;	/* First value in event */
++
++    /* Copy the rest of the event (at least, fixed part) */
++    if((pointer + event_len) > stream->end)
++    {
++        /* Go to next event */
++        stream->current += iwe->len;
++        return -2;
++    }
++
++    /* Fixup for WE-19 and later : pointer no longer in the stream */
++    /* Beware of alignement. Dest has local alignement, not packed */
++    if( (wev > 18) && (event_type == IW_HEADER_TYPE_POINT) )
++        memcpy((char *) iwe + IW_EV_LCP_LEN + IW_EV_POINT_OFF, pointer, event_len);
++    else
++        memcpy((char *) iwe + IW_EV_LCP_LEN, pointer, event_len);
++
++    /* Skip event in the stream */
++    pointer += event_len;
++
++    /* Special processing for iw_point events */
++    if(event_type == IW_HEADER_TYPE_POINT)
++    {
++        /* Check the length of the payload */
++        unsigned int extra_len = iwe->len - (event_len + IW_EV_LCP_PK_LEN);
++        if(extra_len > 0)
++        {
++            /* Set pointer on variable part (warning : non aligned) */
++            iwe->u.data.pointer = pointer;
++
++            /* Check that we have a descriptor for the command */
++            if(descr == NULL)
++                /* Can't check payload -> unsafe... */
++                iwe->u.data.pointer = NULL;	/* Discard paylod */
++            else
++            {
++                /* Those checks are actually pretty hard to trigger,
++                * because of the checks done in the kernel... */
++
++                unsigned int	token_len = iwe->u.data.length * descr->token_size;
++
++                /* Ugly fixup for alignement issues.
++                * If the kernel is 64 bits and userspace 32 bits,
++                * we have an extra 4+4 bytes.
++                * Fixing that in the kernel would break 64 bits userspace. */
++                if((token_len != extra_len) && (extra_len >= 4))
++                {
++                    uint16_t alt_dlen = *((uint16_t *) pointer);
++                    unsigned int alt_token_len = alt_dlen * descr->token_size;
++                    if((alt_token_len + 8) == extra_len)
++                    {
++                        /* Ok, let's redo everything */
++                        pointer -= event_len;
++                        pointer += 4;
++                        /* Dest has local alignement, not packed */
++                        memcpy((char *) iwe + IW_EV_LCP_LEN + IW_EV_POINT_OFF, pointer, event_len);
++                        pointer += event_len + 4;
++                        iwe->u.data.pointer = pointer;
++                        token_len = alt_token_len;
++                    }
++                }
++
++                /* Discard bogus events which advertise more tokens than
++                * what they carry... */
++                if(token_len > extra_len)
++                    iwe->u.data.pointer = NULL;	/* Discard paylod */
++
++                /* Check that the advertised token size is not going to
++                * produce buffer overflow to our caller... */
++                if((iwe->u.data.length > descr->max_tokens)
++                        && !(descr->flags & IW_DESCR_FLAG_NOMAX))
++                    iwe->u.data.pointer = NULL;	/* Discard paylod */
++
++                /* Same for underflows... */
++                if(iwe->u.data.length < descr->min_tokens)
++                    iwe->u.data.pointer = NULL;	/* Discard paylod */
++            }
++        }
++        else
++            /* No data */
++            iwe->u.data.pointer = NULL;
++
++        /* Go to next event */
++        stream->current += iwe->len;
++    }
++    else
++    {
++        /* Ugly fixup for alignement issues.
++        * If the kernel is 64 bits and userspace 32 bits,
++        * we have an extra 4 bytes.
++        * Fixing that in the kernel would break 64 bits userspace. */
++        if((stream->value == NULL)
++                && ((((iwe->len - IW_EV_LCP_PK_LEN) % event_len) == 4)
++                    || ((iwe->len == 12) && ((event_type == IW_HEADER_TYPE_UINT) ||
++                                             (event_type == IW_HEADER_TYPE_QUAL))) ))
++        {
++            pointer -= event_len;
++            pointer += 4;
++            /* Beware of alignement. Dest has local alignement, not packed */
++            memcpy((char *) iwe + IW_EV_LCP_LEN, pointer, event_len);
++            pointer += event_len;
++        }
++
++        /* Is there more value in the event ? */
++        if((pointer + event_len) <= (stream->current + iwe->len))
++            /* Go to next value */
++            stream->value = pointer;
++        else
++        {
++            /* Go to next event */
++            stream->value = NULL;
++            stream->current += iwe->len;
++        }
++    }
++
++    return 1;
++}
++
++static inline void mt76x0_fill_wpa(unsigned char *iebuf, int ielen, struct iwinfo_scanlist_entry *e)
++{
++    static unsigned char ms_oui[3] = { 0x00, 0x50, 0xf2 };
++
++    while (ielen >= 2 && ielen >= iebuf[1])
++    {
++        switch (iebuf[0])
++        {
++        case 48: /* RSN */
++            iwinfo_parse_rsn(&e->crypto, iebuf + 2, iebuf[1],
++                             IWINFO_CIPHER_CCMP, IWINFO_KMGMT_8021x);
++            break;
++
++        case 221: /* Vendor */
++            if (iebuf[1] >= 4 && !memcmp(iebuf + 2, ms_oui, 3) && iebuf[5] == 1)
++                iwinfo_parse_rsn(&e->crypto, iebuf + 6, iebuf[1] - 4,
++                                 IWINFO_CIPHER_TKIP, IWINFO_KMGMT_PSK);
++            break;
++        }
++
++        ielen -= iebuf[1] + 2;
++        iebuf += iebuf[1] + 2;
++    }
++}
++
++
++static inline void mt76x0_fill_entry(struct stream_descr *stream, struct iw_event *event,
++                                      struct iw_range *iw_range, int has_range, struct iwinfo_scanlist_entry *e)
++{
++    int i;
++    double freq;
++
++    /* Now, let's decode the event */
++    switch(event->cmd)
++    {
++    case SIOCGIWAP:
++        memcpy(e->mac, &event->u.ap_addr.sa_data, 6);
++        break;
++
++    case SIOCGIWFREQ:
++        if( event->u.freq.m >= 1000 )
++        {
++            freq = mt76x0_freq2float(&(event->u.freq));
++
++            for(i = 0; i < iw_range->num_frequency; i++)
++            {
++                if( mt76x0_freq2float(&iw_range->freq[i]) == freq )
++                {
++                    e->channel = iw_range->freq[i].i;
++                    break;
++                }
++            }
++        }
++        else
++        {
++            e->channel = event->u.freq.m;
++        }
++
++        break;
++
++    case SIOCGIWMODE:
++        switch(event->u.mode)
++        {
++        case 1:
++            e->mode = IWINFO_OPMODE_ADHOC;
++            break;
++
++        case 2:
++        case 3:
++            e->mode = IWINFO_OPMODE_MASTER;
++            break;
++
++        default:
++            e->mode = IWINFO_OPMODE_UNKNOWN;
++            break;
++        }
++
++        break;
++
++    case SIOCGIWESSID:
++        if( event->u.essid.pointer && event->u.essid.length && event->u.essid.flags )
++            memcpy(e->ssid, event->u.essid.pointer, event->u.essid.length);
++
++        break;
++
++    case SIOCGIWENCODE:
++        e->crypto.enabled = !(event->u.data.flags & IW_ENCODE_DISABLED);
++        break;
++
++    case IWEVQUAL:
++        e->signal = event->u.qual.level;
++        e->quality = event->u.qual.qual;
++        e->quality_max = iw_range->max_qual.qual;
++        break;
++#if 0
++    case SIOCGIWRATE:
++        if(state->val_index == 0)
++        {
++            lua_pushstring(L, "bitrates");
++            lua_newtable(L);
++        }
++        //iw_print_bitrate(buffer, sizeof(buffer), event->u.bitrate.value);
++        snprintf(buffer, sizeof(buffer), "%d", event->u.bitrate.value);
++        lua_pushinteger(L, state->val_index + 1);
++        lua_pushstring(L, buffer);
++        lua_settable(L, -3);
++
++        /* Check for termination */
++        if(stream->value == NULL)
++        {
++            lua_settable(L, -3);
++            state->val_index = 0;
++        } else
++            state->val_index++;
++        break;
++#endif
++    case IWEVGENIE:
++        mt76x0_fill_wpa(event->u.data.pointer, event->u.data.length, e);
++        break;
++    }
++}
++
++#define MYLOG(mes) \
++	{   char buf[8096];  \
++	sprintf(buf, "echo -e \"%s:%d:\n%s\n\">>/tmp/iwinfo", __FUNCTION__, __LINE__, mes);	 \
++	system(buf);	\
++	}
++
++int mt76x0_get_scanlist(const char *ifname, char *buf, int *len)
++{
++    int retval = 0, i = 0, apCount = 0;
++    char data[8192];
++    char ssid_str[256];
++    char header[128];
++    struct iwreq wrq;
++    int entrylen=0;
++    int line_len;
++    SSA *ssap;
++
++    struct iwinfo_scanlist_entry tempscanlist;
++
++    memset(data, 0x00, 32);
++    strcpy(data, "SiteSurvey=1");
++    wrq.u.data.length = strlen(data)+1;
++    wrq.u.data.pointer = data;
++    wrq.u.data.flags = 0;
++
++    if (mt76x0_ioctl(ifname, RTPRIV_IOCTL_SET, &wrq) < 0)
++        return -1;
++
++    sleep(5);
++
++    memset(data, 0, sizeof(data));
++    wrq.u.data.length = sizeof(data);
++    wrq.u.data.pointer = data;
++    wrq.u.data.flags = 0;
++
++    if (mt76x0_ioctl(ifname, RTPRIV_IOCTL_GSITESURVEY, &wrq) < 0)
++        return -1;
++
++    line_len = sizeof(struct _SITE_SURVEY);
++
++    if (wrq.u.data.length > 0)
++    {
++        char *sp, *op;
++        /*		MYLOG(wrq.u.data.pointer+1); */
++        op = sp = wrq.u.data.pointer+line_len+1;
++        int llen = strlen(op);
++        ssap=(SSA *)(op);
++        while (*sp && ((llen - (sp-op)) >= 0))
++        {
++            ssap->SiteSurvey[i].channel[3] = '\0';
++            ssap->SiteSurvey[i].ssid[32] = '\0';
++            ssap->SiteSurvey[i].bssid[19] = '\0';
++            ssap->SiteSurvey[i].encryption[22] = '\0';
++            ssap->SiteSurvey[i].signal[8] = '\0';
++            ssap->SiteSurvey[i].wmode[7] = '\0';
++            ssap->SiteSurvey[i].extch[6] = '\0';
++            ssap->SiteSurvey[i].nt[2] = '\0';
++            sp+=line_len+1;
++            apCount=++i;
++        }
++        if (apCount)
++        {
++            char *enc, *enc1, auth[25];
++            int flag;
++            for (i = 0; i < apCount; i++)
++            {
++                memset(&tempscanlist, 0, sizeof(struct iwinfo_scanlist_entry));
++                tempscanlist.mode=IWINFO_OPMODE_MASTER;
++                tempscanlist.channel=atoi(ssap->SiteSurvey[i].channel);
++                int ssidlen=31;
++                while(ssap->SiteSurvey[i].ssid[ssidlen]==' ')ssidlen--;
++                strlcpy(tempscanlist.ssid,ssap->SiteSurvey[i].ssid,ssidlen+2);
++                sscanf(ssap->SiteSurvey[i].bssid, "%2hhx:%2hhx:%2hhx:%2hhx:%2hhx:%2hhx",
++                       &tempscanlist.mac[0],
++                       &tempscanlist.mac[1],
++                       &tempscanlist.mac[2],
++                       &tempscanlist.mac[3],
++                       &tempscanlist.mac[4],
++                       &tempscanlist.mac[5]);
++                tempscanlist.quality_max=100;
++                tempscanlist.quality=atoi(ssap->SiteSurvey[i].signal);
++
++                strcpy(auth, ssap->SiteSurvey[i].encryption);
++                char *enc = strchrnul(auth,' ');
++                enc[0] = '\0';
++                MYLOG(auth);
++                if (strstr(auth,"NONE")) {
++                    tempscanlist.crypto.auth_algs |= IWINFO_AUTH_OPEN;
++                    tempscanlist.crypto.pair_ciphers |= IWINFO_CIPHER_NONE;
++                    tempscanlist.crypto.auth_suites |= IWINFO_KMGMT_NONE;
++                } else {
++                    char *enc = strchr(auth,'/');
++                    if (!enc)
++                        enc1 = auth;
++                    else
++                    {
++                        enc[0] = '\0';
++                        enc1 = enc+1;
++                    }
++		    /*
++		    MYLOG(auth);
++                    MYLOG(enc1);
++		    */
++                    if (strcmp(enc1,"WEP")==0) {
++                        tempscanlist.crypto.pair_ciphers |= IWINFO_CIPHER_WEP40;
++                        tempscanlist.crypto.auth_suites |= IWINFO_KMGMT_NONE;
++                        tempscanlist.crypto.auth_algs |= IWINFO_AUTH_OPEN;
++                    } else if (strcmp(enc1,"TKIP")==0) {
++                        tempscanlist.crypto.pair_ciphers |= IWINFO_CIPHER_TKIP;
++                        tempscanlist.crypto.auth_suites |= IWINFO_KMGMT_PSK;
++                        tempscanlist.crypto.auth_algs |= IWINFO_AUTH_SHARED;
++                    } else if (strcmp(enc1,"AES")==0) {
++                        tempscanlist.crypto.pair_ciphers |= IWINFO_CIPHER_CCMP;
++                        tempscanlist.crypto.auth_suites |= IWINFO_KMGMT_PSK;
++                        tempscanlist.crypto.auth_algs |= IWINFO_AUTH_SHARED;
++                    } else if (strcmp(enc1,"TKIPAES")==0) {
++                        tempscanlist.crypto.pair_ciphers |= IWINFO_CIPHER_TKIP;
++                        tempscanlist.crypto.pair_ciphers |= IWINFO_CIPHER_CCMP;
++                        tempscanlist.crypto.auth_suites |= IWINFO_KMGMT_PSK;
++                        tempscanlist.crypto.auth_algs |= IWINFO_AUTH_SHARED;
++                    }
++
++                    /* EAP / wpa version */
++                    if (strcmp(auth,"WPA")==0) {
++                        tempscanlist.crypto.auth_suites |= IWINFO_KMGMT_8021x;
++                        tempscanlist.crypto.wpa_version = 1;
++                    }
++                    if (strcmp(auth,"WPA2")==0) {
++                        tempscanlist.crypto.auth_suites |= IWINFO_KMGMT_8021x;
++                        tempscanlist.crypto.wpa_version = 2;
++                    }
++                    if (strcmp(auth,"WPA1WPA2")==0) {
++                        tempscanlist.crypto.auth_suites |= IWINFO_KMGMT_8021x;
++                        tempscanlist.crypto.wpa_version = 3;
++                    }
++                    if (strcmp(auth, "WPANONE")==0)
++                        tempscanlist.crypto.auth_suites |= IWINFO_KMGMT_NONE;
++
++                    /* wpa-psk / version */
++                    if (strstr(auth,"WPAPSK"))
++                        tempscanlist.crypto.wpa_version = 1;
++                    if (strstr(auth,"WPA2PSK"))
++                        tempscanlist.crypto.wpa_version = 2;
++                    if (strstr(auth,"WPA1PSKWPA2PSK"))
++                        tempscanlist.crypto.wpa_version = 3;
++                }
++                tempscanlist.crypto.group_ciphers = tempscanlist.crypto.pair_ciphers;
++                tempscanlist.crypto.enabled = (tempscanlist.crypto.wpa_version && tempscanlist.crypto.auth_suites) ? 1 : 0;
++
++                memcpy(&buf[entrylen], &tempscanlist, sizeof(struct iwinfo_scanlist_entry));
++                entrylen += sizeof(struct iwinfo_scanlist_entry);
++            }
++        }
++    }
++    *len = entrylen;
++    return 0;
++}
++
