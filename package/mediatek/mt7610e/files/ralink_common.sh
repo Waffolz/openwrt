@@ -54,6 +54,13 @@ repair_wireless_uci() {
         fi
         echo  ">>>>>>>>>>>>>>>>>" >>/tmp/wifi.log
     done
+
+    case "$netif" in
+        ra1|ra2|ra3|rai1|rai2|rai3)
+            [ ! -d /sys/class/net/$netif ] && rmmod "$device" && modprobe "$device" && echo "$device module reloaded for $netif" >>/tmp/wifi.log
+        ;;
+    esac
+
     uci changes >>/tmp/wifi.log
     uci commit
 }
@@ -147,6 +154,12 @@ disable_ralink_wifi() {
     for vif in $vifs; do
         config_get ifname $vif ifname
         ifconfig $ifname down
+    done
+
+    # bring down all interfaces (rai1, rai2, etc)
+    local netif=`ifconfig | grep ^ra | awk '{print $1}'`
+    for netifn in $netif; do
+        ifconfig $netifn down
     done
 
     # kill any running ap_clients
