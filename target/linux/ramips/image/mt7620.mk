@@ -147,6 +147,14 @@ define Device/d240
 endef
 TARGET_DEVICES += d240
 
+define Device/dap-1520
+  DTS := DAP-1520
+  IMAGE_SIZE := $(ralink_default_fw_size_8M)
+  DEVICE_TITLE := D-Link DAP-1520
+  DEVICE_PACKAGES := kmod-ledtrig-netdev luci luci-proto-relay wpad hostapd-utils kmod-mt76x0e
+endef
+TARGET_DEVICES += dap-1520
+
 define Device/db-wrt01
   DTS := DB-WRT01
   DEVICE_TITLE := Planex DB-WRT01

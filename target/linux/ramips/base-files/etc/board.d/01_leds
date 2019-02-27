@@ -85,6 +85,9 @@ cf-wr800n)
 d240)
 	set_wifi_led "$boardname:blue:wifi"
 	;;
+dap-1520)
+	ucidef_set_led_netdev "lan" "lan" "$boardname:green:wlan" br-lan
+	;;
 dcs-930l-b1)
 	ucidef_set_led_netdev "wifi" "WiFi" "$boardname:blue:wps"
 	;;
