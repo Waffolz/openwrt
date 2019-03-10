@@ -1,0 +1,63 @@
+Requirements
+
+A USB to UART serial converter
+DAP-1520 UART pinout: https://watchmysys.com/blog/2016/03/d-link-dap-1520-hacking-part-1/dap1520-pcb-rear
+Programs: ckermit (http://www.kermitproject.org/ck90.html#source)
+
+In my case I will be using /dev/ttyACM0. Your serial port might have a different name.
+You might need to add your user to the uucp group to get access to your serial port.
+gpasswd -a username uucp
+
+A modified U-Boot is required to boot OpenWrt correctly!! Read "U-Boot instructions.txt" for more information.
+
+
+The U-Boot menu
+
+Please choose the operation:
+   1: Load system code to SDRAM via TFTP.
+   2: Load system code then write to Flash via TFTP.
+   3: Boot system code via Flash (default).
+   4: Entr boot command line interface.
+   7: Load Boot Loader code then write to Flash via Serial.
+   9: Load Boot Loader code then write to Flash via TFTP.
+
+Options 1, 2, and 9 are useless because we have no ethernet ports to transfer via TFTP.
+"erase linux" erases both, the main OS and recovery OS partitions.
+cp and cp.b didn't work for me. It seemed like U-Boot requires you to transfer the file via TFTP to set the required values.
+
+Fortunately there is a way to transfer an image to the firmware partition without using TFTP or cp.
+There is an option which is available but not shown in the U-Boot menu:  0: Load system code to flash via Serial.
+
+
+How to flash OpenWrt
+
+To connect to a serial port:
+ckermit
+set line /dev/ttyACM0
+set speed 57600
+set carrier-watch off
+connect
+
+To disconnect: Press Ctrl+\ then press c.
+
+screen (https://www.gnu.org/software/screen) can also be used to access the U-Boot menu, but for everything else ckermit will be needed.
+To connect: screen /dev/ttyACM0 57600.
+To disconnect: press Ctrl+a then \ and choose y.
+
+Connect to the serial port, reboot the device and choose the option 4 in the U-Boot menu.
+First, we will erase the firmware partition. Enter the following command: erase linux
+Now we will send the OpenWrt image. Reboot the device with the "reset" command and choose the option 0 in the U-Boot menu.
+Press Ctrl+\ then press c to disconnect and set the following options in ckermit:
+
+set handshake none
+set flow-control none
+robust
+set file type bin
+set file name lit
+set rec pack 1000
+set send pack 1000
+set window 5
+send /path/to/openwrt-ramips-mt7620-dap-1520-squashfs-sysupgrade.bin
+
+This will take about 15 minutes to finish. After this, the device will reboot and OpenWrt should boot.
+Upgrades to future firmwares can be done through LuCI.

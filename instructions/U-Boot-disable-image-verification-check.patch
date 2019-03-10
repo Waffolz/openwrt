@@ -1,0 +1,32 @@
+diff --git a/platform/MT7620/u-boot_DAP-1520/lib_mips/board.c b/platform/MT7620/u-boot_DAP-1520/lib_mips/board.c
+index 16192868..a6500787 100755
+--- a/platform/MT7620/u-boot_DAP-1520/lib_mips/board.c
++++ b/platform/MT7620/u-boot_DAP-1520/lib_mips/board.c
+@@ -1994,8 +1994,8 @@ void board_init_r (gd_t *id, ulong dest_addr)
+ 		 * Date: 2013-03-14
+ 		 * Reason: Add D-Link DUAL IMAGES
+ 		 */
+-		int check_image_result=0;
+-		check_image_result=check_cameo_image_status();
++		//int check_image_result=0;
++		//check_image_result=check_cameo_image_status();
+ 		/* Name: KK Huang
+ 		 * Date: 2013-03-01
+ 		 * Reason: Add D-Link backup mode
+@@ -2017,6 +2017,7 @@ void board_init_r (gd_t *id, ulong dest_addr)
+ 		
+ 		// check if reset button is pressed
+ 		value = le32_to_cpu(*(volatile u32 *)(RT2880_REG_PIODATA));
++#if 0
+ 		if ((value & (1<<RESET_BUTTON)) == BUTTON_DOWN){
+ 			if(check_image_result==BOTH_IMAGES_OK || check_image_result==ONLY_IMAGE1_BROKEN){
+ 				sprintf(addr_str, "0x%X", (CFG_FLASH_BASE + (BOOTLAODER_BLK_NUM + NVRAM_BLK_NUM + CAL_BLK_NUM + NORMAL_IMAGE_BLK_NUM + LANG_BLK_NUM) * (BLK_SIZE)));
+@@ -2034,6 +2035,8 @@ void board_init_r (gd_t *id, ulong dest_addr)
+ 				enter_backup_mode();
+ 			}
+ 		}
++#endif
++        sprintf(addr_str, "0x%X", (CFG_FLASH_BASE + (BOOTLAODER_BLK_NUM + NVRAM_BLK_NUM + CAL_BLK_NUM) * (BLK_SIZE)));
+ 	}
+ 
+ #ifdef DUAL_IMAGE_SUPPORT
