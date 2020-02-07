@@ -1,0 +1,67 @@
+About the patch
+
+U-Boot performs an image validation check for Image1 (main OS) and Image2 (recovery OS).
+After OpenWrt is flashed, Image2 will no longer exist. This will make U-Boot mark Image2 as broken.
+That is fine as long as U-Boot tries to boot Image1, but Image1 will be marked as unstable. This might be because of the OpenWrt image size.
+If Image1 is in the unstable state, a try counter will start and it will increase in value after every boot.
+When the try counter is greater than 3, U-Boot will mark Image1 as broken.
+This will eventually result in backup mode, making the device unable to boot normally.
+Reflashing the OpenWrt image will reset the try counter value, but this will only last for the next 3 boots.
+The included patch disables that image verification so that U-Boot boots the OpenWrt image without issue.
+
+
+How to compile U-Boot
+
+Download the latest DAP-1520 source code from https://tsd.dlink.com.tw/downloads2008list.asp?SourceType=download&OS=GPL
+The latest version for me is DAP-1520 A1 FW v1.08.
+The README.txt inside should explain how to compile everything, but here is a simplified version of what is needed to compile U-Boot.
+
+
+# Extract the source code
+tar -xvf DAP-1520_A1_v108b01_FOSS.tar.gz
+
+# These are hardcoded paths needed for the DAP-1520 source code
+sudo cp -av DAP-1520_A1_v108b01_FOSS/toolchain/buildroot-gcc342 /opt/
+sudo cp -av DAP-1520_A1_v108b01_FOSS/Source /home/
+sudo mv /home/DAP-1520_A1_v108b01_FOSS /home/AthSDK
+
+# Apply the patch to disable the image verification check
+cd /home/AthSDK
+patch -Np1 -i /path/to/U-Boot-disable-image-verification-check.patch
+
+# Compile U-Boot
+make loader_clean
+make mtk_loader
+
+
+The new U-Boot image will be inside /home/AthSDK/image/
+There will be 2 files, DAP1520A1_FW100.boot and uboot.bin. Both are the same file with a different name.
+
+sha512sum DAP1520A1_FW100.boot uboot.bin
+537cfa846b192d2360d54fa4e8bbe7ba62b0ecfc4344067a88c3686e6d8112a84e20f5949d92b40586e954f02e84df5f3d61cdee2351370eee4612352b0c7555  DAP1520A1_FW100.boot
+537cfa846b192d2360d54fa4e8bbe7ba62b0ecfc4344067a88c3686e6d8112a84e20f5949d92b40586e954f02e84df5f3d61cdee2351370eee4612352b0c7555  uboot.bin
+
+
+How to flash U-Boot
+
+It is recommended to dump the SPI flash before doing anything, just in case something goes wrong later.
+Make sure to flash the correct file or the device will brick and a SPI flasher will be needed to restore the bootloader!!
+
+Reboot to the U-Boot menu and choose option 7 (7: Load Boot Loader code then write to Flash via Serial.)
+
+Send the image:
+ckermit
+set line /dev/ttyACM0
+set speed 57600
+set carrier-watch off
+set handshake none
+set flow-control none
+robust
+set file type bin
+set file name lit
+set rec pack 1000
+set send pack 1000
+set window 5
+send /path/to/uboot.bin
+
+This should take a few seconds to finish.
