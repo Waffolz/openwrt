@@ -79,12 +79,14 @@ detect_mac80211() {
 		channel="11"
 		htmode=""
 		ht_capab=""
+		freq_band=""
 
 		iw phy "$dev" info | grep -q 'Capabilities:' && htmode=HT20
 
 		iw phy "$dev" info | grep -q '5180 MHz' && {
 			mode_band="a"
 			channel="36"
+			freq_band="-5G"
 			iw phy "$dev" info | grep -q 'VHT Capabilities' && htmode="VHT80"
 		}
 
@@ -110,7 +112,7 @@ detect_mac80211() {
 			set wireless.default_radio${devidx}.device=radio${devidx}
 			set wireless.default_radio${devidx}.network=lan
 			set wireless.default_radio${devidx}.mode=ap
-			set wireless.default_radio${devidx}.ssid=OpenWrt
+			set wireless.default_radio${devidx}.ssid=OpenWrt${freq_band}
 			set wireless.default_radio${devidx}.encryption=none
 EOF
 		uci -q commit wireless

@@ -162,6 +162,15 @@ define Device/comfast_cf-wr800n
 endef
 TARGET_DEVICES += comfast_cf-wr800n
 
+define Device/dlink_dap-1520
+  SOC := mt7620a
+  IMAGE_SIZE := 7872k
+  DEVICE_VENDOR := D-Link
+  DEVICE_MODEL := DAP-1520
+  DEVICE_PACKAGES := kmod-ledtrig-netdev luci luci-proto-relay wpad hostapd-utils kmod-mt76x0e
+endef
+TARGET_DEVICES += dlink_dap-1520
+
 define Device/dlink_dch-m225
   $(Device/seama)
   SOC := mt7620a
