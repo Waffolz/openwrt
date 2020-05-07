@@ -1,0 +1,205 @@
+diff --git a/package/kernel/mac80211/files/lib/wifi/mac80211.sh b/package/kernel/mac80211/files/lib/wifi/mac80211.sh
+index be9c537926..f8793e155a 100644
+--- a/package/kernel/mac80211/files/lib/wifi/mac80211.sh
++++ b/package/kernel/mac80211/files/lib/wifi/mac80211.sh
+@@ -79,12 +79,14 @@ detect_mac80211() {
+ 		channel="11"
+ 		htmode=""
+ 		ht_capab=""
++		freq_band=""
+ 
+ 		iw phy "$dev" info | grep -q 'Capabilities:' && htmode=HT20
+ 
+ 		iw phy "$dev" info | grep -q '5180 MHz' && {
+ 			mode_band="a"
+ 			channel="36"
++			freq_band="-5G"
+ 			iw phy "$dev" info | grep -q 'VHT Capabilities' && htmode="VHT80"
+ 		}
+ 
+@@ -110,7 +112,7 @@ detect_mac80211() {
+ 			set wireless.default_radio${devidx}.device=radio${devidx}
+ 			set wireless.default_radio${devidx}.network=lan
+ 			set wireless.default_radio${devidx}.mode=ap
+-			set wireless.default_radio${devidx}.ssid=OpenWrt
++			set wireless.default_radio${devidx}.ssid=OpenWrt${freq_band}
+ 			set wireless.default_radio${devidx}.encryption=none
+ EOF
+ 		uci -q commit wireless
+diff --git a/target/linux/ramips/dts/mt7620a_dlink_dap-1520.dts b/target/linux/ramips/dts/mt7620a_dlink_dap-1520.dts
+new file mode 100644
+index 0000000000..f8c606dcb1
+--- /dev/null
++++ b/target/linux/ramips/dts/mt7620a_dlink_dap-1520.dts
+@@ -0,0 +1,122 @@
++/dts-v1/;
++
++#include "mt7620a.dtsi"
++
++#include <dt-bindings/gpio/gpio.h>
++#include <dt-bindings/input/input.h>
++
++/ {
++	compatible = "dlink,dap-1520", "ralink,mt7620a-soc";
++	model = "D-Link DAP-1520";
++
++	aliases {
++		led-boot = &led_power_red;
++		led-failsafe = &led_power_red;
++		led-running = &led_power_red;
++		led-upgrade = &led_power_red;
++	};
++
++	keys {
++		compatible = "gpio-keys";
++
++		wps {
++			label = "wps";
++			gpios = <&gpio0 12 GPIO_ACTIVE_LOW>;
++			linux,code = <KEY_RFKILL>;
++		};
++
++		reset {
++			label = "reset";
++			gpios = <&gpio0 13 GPIO_ACTIVE_LOW>;
++			linux,code = <KEY_RESTART>;
++		};
++	};
++
++	leds {
++		compatible = "gpio-leds";
++
++		led_power_red: power {
++			label = "dap-1520:red:power";
++			gpios = <&gpio1 4 GPIO_ACTIVE_LOW>;
++		};
++
++		wlan {
++			label = "dap-1520:green:wlan";
++			gpios = <&gpio1 5 GPIO_ACTIVE_LOW>;
++		};
++	};
++};
++
++&gpio0 {
++	status = "okay";
++};
++
++&gpio1 {
++	status = "okay";
++};
++
++&spi0 {
++	status = "okay";
++
++	flash@0 {
++		compatible = "jedec,spi-nor";
++		reg = <0>;
++		spi-max-frequency = <50000000>;
++
++		partitions {
++			compatible = "fixed-partitions";
++			#address-cells = <1>;
++			#size-cells = <1>;
++
++			partition@0 {
++				label = "u-boot";
++				reg = <0x0 0x30000>;
++				read-only;
++			};
++
++			partition@30000 {
++				label = "u-boot-env";
++				reg = <0x30000 0x10000>;
++				read-only;
++			};
++
++			factory: partition@40000 {
++				label = "factory";
++				reg = <0x40000 0x10000>;
++				read-only;
++			};
++
++			partition@50000 {
++				compatible = "denx,uimage";
++				label = "firmware";
++				reg = <0x50000 0x7b0000>;
++			};
++		};
++	};
++};
++
++&pinctrl {
++	state_default: pinctrl0 {
++		gpio {
++			groups = "i2c", "uartf", "rgmii1";
++			function = "gpio";
++		};
++	};
++};
++
++&pcie {
++	status = "okay";
++};
++
++&wmac {
++	ralink,mtd-eeprom = <&factory 0x0>;
++};
++
++&pcie0 {
++	wifi@0,0 {
++		compatible = "mediatek,mt76";
++		reg = <0x0000 0 0 0 0>;
++		mediatek,mtd-eeprom = <&factory 0x8000>;
++		ieee80211-freq-limit = <5000000 6000000>;
++	};
++};
+diff --git a/target/linux/ramips/image/mt7620.mk b/target/linux/ramips/image/mt7620.mk
+index 69b9b7d7fd..d1853ae8a1 100644
+--- a/target/linux/ramips/image/mt7620.mk
++++ b/target/linux/ramips/image/mt7620.mk
+@@ -162,6 +162,15 @@ define Device/comfast_cf-wr800n
+ endef
+ TARGET_DEVICES += comfast_cf-wr800n
+ 
++define Device/dlink_dap-1520
++  SOC := mt7620a
++  IMAGE_SIZE := 7872k
++  DEVICE_VENDOR := D-Link
++  DEVICE_MODEL := DAP-1520
++  DEVICE_PACKAGES := luci luci-proto-relay kmod-mt76x0e kmod-ledtrig-netdev
++endef
++TARGET_DEVICES += dlink_dap-1520
++
+ define Device/dlink_dch-m225
+   $(Device/seama)
+   SOC := mt7620a
+diff --git a/target/linux/ramips/mt7620/base-files/etc/board.d/01_leds b/target/linux/ramips/mt7620/base-files/etc/board.d/01_leds
+index d332e02bbd..3f67825d1a 100755
+--- a/target/linux/ramips/mt7620/base-files/etc/board.d/01_leds
++++ b/target/linux/ramips/mt7620/base-files/etc/board.d/01_leds
+@@ -60,6 +60,9 @@ comfast,cf-wr800n)
+ 	ucidef_set_led_netdev "lan" "lan" "$boardname:white:ethernet" eth0.1
+ 	set_wifi_led "$boardname:white:wifi"
+ 	;;
++dlink,dap-1520)
++	ucidef_set_led_netdev "lan" "lan" "$boardname:green:wlan" br-lan
++	;;
+ dlink,dwr-116-a1|\
+ head-weblink,hdrm200|\
+ ohyeah,oy-0001|\
+diff --git a/target/linux/ramips/mt7620/base-files/etc/board.d/02_network b/target/linux/ramips/mt7620/base-files/etc/board.d/02_network
+index 8ae50b3df5..372f45a17a 100755
+--- a/target/linux/ramips/mt7620/base-files/etc/board.d/02_network
++++ b/target/linux/ramips/mt7620/base-files/etc/board.d/02_network
+@@ -269,6 +269,10 @@ ramips_setup_macs()
+ 		wan_mac=$(mtd_get_mac_binary factory 0x2e)
+ 		label_mac=$(mtd_get_mac_binary factory 0x4)
+ 		;;
++	dlink,dap-1520)
++		lan_mac=$(mtd_get_mac_text factory 0xff3c)
++		label_mac=$lan_mac
++		;;
+ 	dlink,dch-m225)
+ 		lan_mac=$(mtd_get_mac_ascii factory lanmac)
+ 		;;
